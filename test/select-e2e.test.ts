@@ -20,6 +20,11 @@ const ALL_E2E = [
   "test/e2e/dream.test.ts",
   "test/e2e/code-indexing.test.ts",
   "test/e2e/engine-parity.test.ts",
+  "test/e2e/chunk-canonical-text-privacy.test.ts",
+  "test/e2e/engine-content-privacy.test.ts",
+  "test/e2e/legacy-chunk-privacy.test.ts",
+  "test/e2e/read-enrichment-privacy.test.ts",
+  "test/e2e/remote-privacy-journeys.test.ts",
   "test/e2e/graph-quality.test.ts",
   "test/e2e/http-transport.test.ts",
   "test/e2e/integrity-batch.test.ts",
@@ -111,6 +116,11 @@ describe("selectTests", () => {
 
   test("case 3: single mapped src -> only mapped tests", () => {
     expect(select(["src/core/search/intent.ts"])).toEqual([
+      "test/e2e/chunk-canonical-text-privacy.test.ts",
+      "test/e2e/engine-content-privacy.test.ts",
+      "test/e2e/legacy-chunk-privacy.test.ts",
+      "test/e2e/read-enrichment-privacy.test.ts",
+      "test/e2e/remote-privacy-journeys.test.ts",
       "test/e2e/search-exclude.test.ts",
       "test/e2e/search-quality.test.ts",
       "test/e2e/search-swamp.test.ts",
@@ -190,6 +200,11 @@ describe("selectTests", () => {
       "src/core/search/intent.ts",
     ]);
     expect(result).toEqual([
+      "test/e2e/chunk-canonical-text-privacy.test.ts",
+      "test/e2e/engine-content-privacy.test.ts",
+      "test/e2e/legacy-chunk-privacy.test.ts",
+      "test/e2e/read-enrichment-privacy.test.ts",
+      "test/e2e/remote-privacy-journeys.test.ts",
       "test/e2e/search-exclude.test.ts",
       "test/e2e/search-quality.test.ts",
       "test/e2e/search-swamp.test.ts",
