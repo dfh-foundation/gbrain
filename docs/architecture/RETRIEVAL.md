@@ -137,7 +137,9 @@ Expansion is opt-in per mode bundle (`tokenmax` on by default; `balanced` + `con
 
 ## Putting it together
 
-The full pipeline for a `query` op:
+The full pipeline for a trusted local `query` op follows. Remote retrieval
+omits the optional code-graph augmentation stage; the policy-filtered typed-edge
+relational recall arm remains available.
 
 ```
 intent classify (query-intent.ts — deterministic, no LLM)
@@ -286,6 +288,8 @@ this rebuild too; trusted local chunk reads remain available. Body or chunk chan
 invalidate that record until the next successful rebuild. Direct page reads
 continue to use current source and visibility policy plus body sanitization.
 
+Run rebuild commands from a local installation on the brain host; thin clients
+cannot rebuild the host's indexes.
 `gbrain reindex --markdown --dry-run --no-embed` previews the existing rebuild.
 `gbrain reindex --markdown --no-embed` rebuilds without embedding calls, replacing
 previous vectors; use `gbrain embed --stale` later to restore semantic retrieval

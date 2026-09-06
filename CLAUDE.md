@@ -239,8 +239,9 @@ has three verbatim homes: this section, the `gbrain init` picker copy
 
 **Per-query math vs real-world spend.** The matrix above is what an
 isolated benchmark would measure. Real agent loops with disciplined
-Anthropic prompt caching see 50-80% discount on top (cache hits skip
-downstream entirely). The realistic-scale anchor in
+Anthropic prompt caching see 50-80% discount on top through lower
+cached-input charges. This is separate from GBrain's disabled semantic result
+cache. The realistic-scale anchor in
 `docs/eval/SEARCH_MODE_METHODOLOGY.md` walks the natural pairings at
 single-power-user volume (~860 turns/mo): tokenmax+Opus ~\$700/mo,
 balanced+Sonnet ~\$430/mo, conservative+Haiku ~\$170/mo. Setups WITHOUT
