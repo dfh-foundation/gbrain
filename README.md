@@ -1,3 +1,8 @@
+> **This is a fork.** It carries one patch on top of upstream
+> [garrytan/gbrain](https://github.com/garrytan/gbrain): a native Amazon Bedrock
+> provider, so a deployment inside AWS needs no model-provider API key. See
+> **[FORK.md](FORK.md)** for why it exists, the branch layout, and how to rebase.
+
 # GBrain
 
 **Give the agent you already use a memory you control.** GBrain stores explicit facts with their sources, supports corrections and withdrawal, and makes the same memory available across your agents. Start with keyless memory and keyword retrieval; add semantic search, synthesis, and background enrichment when you need them.
