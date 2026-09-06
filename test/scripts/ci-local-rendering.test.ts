@@ -204,13 +204,14 @@ describe('ci-local execution coverage', () => {
 });
 
 describe('required PgBouncer execution through run-e2e', () => {
-  for (const [required, passes, testExit, expectedExit] of [
-    [true, 2, 0, 0],
-    [true, 0, 0, 1],
-    [true, 0, 3, 1],
-    [false, 0, 0, 0],
+  for (const [required, passes, testExit, expectedExit, parentCoverageExists] of [
+    [true, 2, 0, 0, false],
+    [true, 0, 0, 1, false],
+    [true, 0, 3, 1, false],
+    [false, 0, 0, 0, false],
+    [true, 2, 0, 0, true],
   ] as const) {
-    test(`required=${required}, executed=${passes}, Bun exit=${testExit}`, () => {
+    test(`required=${required}, executed=${passes}, Bun exit=${testExit}, parent coverage exists=${parentCoverageExists}`, () => {
       const home = mkdtempSync(join(tmpdir(), 'gbrain-ci-pooler-'));
       try {
         const bin = join(home, 'bin');
@@ -221,20 +222,31 @@ describe('required PgBouncer execution through run-e2e', () => {
         writeFileSync(join(home, 'scripts/lib/test-env.sh'), 'ensure_pglite_snapshot() { :; }\n');
         writeFileSync(join(bin, 'psql'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
         writeFileSync(join(bin, 'bun'), `#!/bin/sh
-printf '%s\\n' "$GBRAIN_PGBOUNCER_URL" "$GBRAIN_PGBOUNCER_DIRECT_URL" "$GBRAIN_CI_REQUIRE_PGBOUNCER" "$GBRAIN_TEST_DB" "\${GBRAIN_SOURCE-unset}" > "$ENV_REPORT"
+printf '%s\\n' "$GBRAIN_PGBOUNCER_URL" "$GBRAIN_PGBOUNCER_DIRECT_URL" "$GBRAIN_CI_REQUIRE_PGBOUNCER" "$GBRAIN_TEST_DB" "\${GBRAIN_SOURCE-unset}" "\${COVERAGE_DIR:-disabled}" > "$ENV_REPORT"
 printf ' %s pass\\n 0 fail\\n' "$FAKE_PASSES"
 exit "$FAKE_EXIT"
 `, { mode: 0o755 });
         const report = join(home, 'environment');
         const pooled = 'postgresql://localhost:6543/gbrain_pgbouncer';
         const direct = 'postgresql://localhost:5434/gbrain_test';
+        const parentCoverage = join(home, 'parent-coverage');
+        const parentManifest = join(parentCoverage, 'lane-manifest.json');
+        const manifestBefore = '{"lane":"shard-1","complete":true}\n';
+        if (parentCoverageExists) {
+          mkdirSync(parentCoverage);
+          writeFileSync(parentManifest, manifestBefore);
+        }
+        // Model hosted CI even when this test runs locally: nested fake Bun
+        // must neither collect into nor overwrite the outer unit lane.
+        const inheritedEnv = { ...process.env, COVERAGE_DIR: parentCoverage };
         const result = spawnSync('bash', [join(home, 'scripts/run-e2e.sh'), 'test/e2e/pgbouncer-teardown.test.ts'], {
           cwd: home, encoding: 'utf8', timeout: 5_000,
           env: {
-            ...process.env, HOME: home, PATH: `${bin}:${process.env.PATH}`,
+            ...inheritedEnv, HOME: home, PATH: `${bin}:${process.env.PATH}`,
             // This child intentionally exercises one selected file. The outer
             // unit shard must not repartition it into an empty E2E selection.
             SHARD: '',
+            COVERAGE_DIR: '',
             DATABASE_URL: direct, GBRAIN_PGBOUNCER_URL: pooled, GBRAIN_PGBOUNCER_DIRECT_URL: direct,
             GBRAIN_CI_REQUIRE_PGBOUNCER: required ? '1' : '0', GBRAIN_SOURCE: 'ambient-must-be-removed',
             GBRAIN_TEST_DB: '1',
@@ -242,7 +254,9 @@ exit "$FAKE_EXIT"
           },
         });
         expect(result.status, result.stdout + result.stderr).toBe(expectedExit);
-        expect(readFileSync(report, 'utf8')).toBe(`${pooled}\n${direct}\n${required ? '1' : '0'}\n1\nunset\n`);
+        expect(readFileSync(report, 'utf8')).toBe(`${pooled}\n${direct}\n${required ? '1' : '0'}\n1\nunset\ndisabled\n`);
+        if (parentCoverageExists) expect(readFileSync(parentManifest, 'utf8')).toBe(manifestBefore);
+        else expect(existsSync(parentCoverage)).toBe(false);
         if (required && passes === 0 && testExit === 0) expect(result.stdout).toContain('required PgBouncer tests did not execute');
       } finally {
         rmSync(home, { recursive: true, force: true });
