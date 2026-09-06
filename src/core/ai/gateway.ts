@@ -28,6 +28,8 @@ import { listRecipes } from './recipes/index.ts';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createAnthropic } from '@ai-sdk/anthropic';
+import { createAmazonBedrock } from '@ai-sdk/amazon-bedrock';
+import { bedrockClientOptions } from './providers/bedrock-credentials.ts';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { z } from 'zod';
 
@@ -1756,6 +1758,8 @@ function instantiateEmbedding(recipe: Recipe, modelId: string, cfg: AIGatewayCon
       throw new AIConfigError(
         `Anthropic has no embedding model. Use openai or google for embeddings.`,
       );
+    case 'native-bedrock':
+      return createAmazonBedrock(bedrockClientOptions(cfg)).textEmbeddingModel(modelId);
     case 'claude-cli':
       throw new AIConfigError(
         `claude-cli has no embedding model. Use openai or google for embeddings.`,
@@ -2742,6 +2746,8 @@ function instantiateExpansion(recipe: Recipe, modelId: string, cfg: AIGatewayCon
       const baseURL = resolveNativeBaseUrl('anthropic', cfg);
       return createAnthropic({ apiKey, ...(baseURL ? { baseURL } : {}) }).languageModel(modelId);
     }
+    case 'native-bedrock':
+      return createAmazonBedrock(bedrockClientOptions(cfg)).languageModel(modelId);
     case 'claude-cli': {
       // The CLI handles its own auth (OAuth session); spawn the subprocess
       // directly via the same LanguageModelV2 implementation chat uses. There
@@ -3614,6 +3620,8 @@ function instantiateChat(recipe: Recipe, modelId: string, cfg: AIGatewayConfig):
       const baseURL = resolveNativeBaseUrl('anthropic', cfg);
       return createAnthropic({ apiKey, ...(baseURL ? { baseURL } : {}) }).languageModel(modelId);
     }
+    case 'native-bedrock':
+      return createAmazonBedrock(bedrockClientOptions(cfg)).languageModel(modelId);
     case 'claude-cli': {
       // The CLI handles its own auth (OAuth session managed by `claude`
       // login). Subprocess-based LanguageModelV2 dispatches via the recipe
@@ -3994,6 +4002,26 @@ export async function chat(opts: ChatOpts): Promise<ChatResult> {
     ? (providerOptions.anthropic?.cacheControl ?? { type: 'ephemeral' })
     : undefined;
 
+  // One breakpoint value, spelled for whichever provider is actually serving
+  // this call. Anthropic marks a block with `cacheControl`; Bedrock's Converse
+  // API takes a positional `cachePoint` block under its own provider key, so on
+  // Bedrock the Anthropic marker alone is a silent no-op — the request succeeds
+  // and simply never caches.
+  //
+  // The Bedrock key is added ONLY for the Bedrock recipe. Emitting both
+  // unconditionally would be inert under the AI SDK's provider-options contract,
+  // but it would break the invariant that a non-Anthropic route carries
+  // Anthropic-namespaced markers and nothing else — which the Gemini breakpoint
+  // test pins deliberately.
+  const cacheMarkers = cacheControlValue
+    ? {
+        anthropic: { cacheControl: cacheControlValue },
+        ...(recipe.implementation === 'native-bedrock'
+          ? { bedrock: { cachePoint: { type: 'default' as const } } }
+          : {}),
+      }
+    : undefined;
+
   // Anthropic-only secondary breakpoint: mark the LAST tool def too (mirrors
   // subagent.ts's raw-SDK path — Anthropic caches everything up to and
   // including the last `cache_control` block it sees in the request, so
@@ -4003,7 +4031,7 @@ export async function chat(opts: ChatOpts): Promise<ChatResult> {
   if (cacheControlValue && opts.tools && opts.tools.length > 0 && tools) {
     const lastTool = tools[opts.tools[opts.tools.length - 1]!.name];
     if (lastTool) {
-      lastTool.providerOptions = { anthropic: { cacheControl: cacheControlValue } };
+      lastTool.providerOptions = cacheMarkers;
     }
   }
 
@@ -4037,7 +4065,7 @@ export async function chat(opts: ChatOpts): Promise<ChatResult> {
     ? {
         role: 'system' as const,
         content: opts.system,
-        providerOptions: { anthropic: { cacheControl: cacheControlValue } },
+        providerOptions: cacheMarkers,
       }
     : opts.system;
 

@@ -177,6 +177,14 @@ const QWEN3_EMBEDDING_NATIVE_DIMS: Record<string, number> = {
 };
 
 /**
+ * Cohere Embed on Bedrock is Matryoshka over these widths, sent as
+ * `outputDimension`. Titan v2 is Matryoshka too but over a narrower set, under
+ * the differently named `dimensions` field — hence two tables rather than one.
+ */
+export const COHERE_BEDROCK_VALID_DIMS: readonly number[] = [256, 512, 1024, 1536];
+export const TITAN_BEDROCK_VALID_DIMS: readonly number[] = [256, 512, 1024];
+
+/**
  * Build the providerOptions blob for embedMany() that pins output dimensions.
  *
  * Matryoshka providers (OpenAI text-embedding-3, Gemini embedding-001) can be
@@ -233,6 +241,45 @@ export function dimsProviderOptions(
     case 'native-anthropic':
       // Anthropic has no embedding model.
       return undefined;
+    case 'native-bedrock': {
+      // Cohere Embed on Bedrock is asymmetric, and @ai-sdk/amazon-bedrock
+      // defaults an unset inputType to `search_query`. Omitting this case would
+      // therefore embed every INDEXED document as a query — corrupting the whole
+      // index rather than degrading one lookup, and silently, since the request
+      // succeeds either way. Default to the document side, as the ZeroEntropy
+      // case above does.
+      if (matchId.includes('cohere.embed-')) {
+        if (!COHERE_BEDROCK_VALID_DIMS.includes(dims)) {
+          throw new AIConfigError(
+            `Bedrock model "${modelId}" supports embedding_dimensions only in ` +
+            `{${COHERE_BEDROCK_VALID_DIMS.join(', ')}}, got ${dims}.`,
+            `Set \`embedding_dimensions\` to one of ` +
+            `${COHERE_BEDROCK_VALID_DIMS.join('/')} in your gbrain config.`,
+          );
+        }
+        return {
+          bedrock: {
+            inputType: inputType === 'query' ? 'search_query' : 'search_document',
+            outputDimension: dims,
+          },
+        };
+      }
+      // Titan v2 is Matryoshka but symmetric — no inputType — and takes a
+      // narrower dimension set than Cohere under a differently named field.
+      if (matchId.includes('titan-embed-text-v2')) {
+        if (!TITAN_BEDROCK_VALID_DIMS.includes(dims)) {
+          throw new AIConfigError(
+            `Bedrock model "${modelId}" supports embedding_dimensions only in ` +
+            `{${TITAN_BEDROCK_VALID_DIMS.join(', ')}}, got ${dims}.`,
+            `Set \`embedding_dimensions\` to one of ` +
+            `${TITAN_BEDROCK_VALID_DIMS.join('/')} in your gbrain config.`,
+          );
+        }
+        return { bedrock: { dimensions: dims } };
+      }
+      // Titan v1 and anything else: fixed width, no options to send.
+      return undefined;
+    }
     case 'openai-compatible':
       // ZE zembed-1 — flexible Matryoshka dims + asymmetric input_type.
       // Lives BEFORE the generic openai-compatible fall-through to avoid

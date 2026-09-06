@@ -64,7 +64,7 @@ describe('chat touchpoint — recipe registry', () => {
     // it is a property of the whole provider. Anything else must declare no
     // caching.
     const PREDICATE = new Set(['openai', 'openrouter', 'google']);
-    const ALWAYS_CACHES = new Set(['anthropic', 'deepseek', 'llama-server']);
+    const ALWAYS_CACHES = new Set(['anthropic', 'bedrock', 'deepseek', 'llama-server']);
     for (const r of listRecipes()) {
       if (!r.touchpoints.chat) continue;
       const flag = r.touchpoints.chat.supports_prompt_cache;

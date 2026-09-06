@@ -312,3 +312,87 @@ describe('OpenRouter prompt caching (takeover of PR #1988)', () => {
     });
   });
 });
+
+describe('Bedrock cache breakpoints carry the bedrock spelling', () => {
+  beforeEach(() => {
+    resetGateway();
+    __setGenerateTextTransportForTests(null);
+  });
+
+  async function captureBedrockArgs(opts: Partial<Parameters<typeof chat>[0]> = {}): Promise<any> {
+    let captured: any;
+    __setGenerateTextTransportForTests(async (args: any) => {
+      captured = args;
+      return {
+        content: [{ type: 'text', text: 'ok' }],
+        finishReason: 'stop',
+        usage: { inputTokens: 1, outputTokens: 1 },
+      } as any;
+    });
+    configureGateway({
+      chat_model: 'bedrock:us.anthropic.claude-sonnet-5',
+      env: { AWS_REGION: 'us-east-2' },
+    });
+    await chat({
+      model: 'bedrock:us.anthropic.claude-sonnet-5',
+      messages: [{ role: 'user', content: 'hello' }],
+      ...opts,
+    });
+    return captured;
+  }
+
+  // The silent failure this guards: Bedrock reads
+  // `providerOptions.bedrock.cachePoint`, so an Anthropic-only marker leaves the
+  // request valid and successful while caching nothing. Nothing surfaces except
+  // the bill, which is why the recipe's supports_prompt_cache claim is only
+  // honest with this assertion holding.
+  test('the system block carries a bedrock cachePoint alongside the anthropic marker', async () => {
+    const args = await captureBedrockArgs({ system: 'SYS', cacheSystem: true });
+    expect(args.system.providerOptions).toEqual({
+      anthropic: { cacheControl: { type: 'ephemeral' } },
+      bedrock: { cachePoint: { type: 'default' } },
+    });
+  });
+
+  test('the last tool def carries it too', async () => {
+    const args = await captureBedrockArgs({
+      system: 'SYS',
+      cacheSystem: true,
+      tools: [
+        { name: 'search', description: 'search', inputSchema: { type: 'object', properties: {} } },
+        { name: 'put_page', description: 'put_page', inputSchema: { type: 'object', properties: {} } },
+      ],
+    });
+    expect(args.tools.search.providerOptions).toBeUndefined();
+    expect(args.tools.put_page.providerOptions).toEqual({
+      anthropic: { cacheControl: { type: 'ephemeral' } },
+      bedrock: { cachePoint: { type: 'default' } },
+    });
+  });
+
+  // The other half of the contract: the bedrock key is scoped to the bedrock
+  // route. A non-Bedrock provider must keep receiving Anthropic-namespaced
+  // markers and nothing else — pinned for Gemini in recipe-google-prompt-cache.
+  test('a non-bedrock route gets no bedrock key', async () => {
+    let captured: any;
+    __setGenerateTextTransportForTests(async (args: any) => {
+      captured = args;
+      return {
+        content: [{ type: 'text', text: 'ok' }],
+        finishReason: 'stop',
+        usage: { inputTokens: 1, outputTokens: 1 },
+      } as any;
+    });
+    configureGateway({
+      chat_model: 'anthropic:claude-sonnet-4-6',
+      env: { ANTHROPIC_API_KEY: 'fake' },
+    });
+    await chat({
+      model: 'anthropic:claude-sonnet-4-6',
+      messages: [{ role: 'user', content: 'hello' }],
+      system: 'SYS',
+      cacheSystem: true,
+    });
+    expect(captured.system.providerOptions.bedrock).toBeUndefined();
+  });
+});
