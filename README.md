@@ -1,3 +1,8 @@
+> **This is a fork.** It carries one patch on top of upstream
+> [garrytan/gbrain](https://github.com/garrytan/gbrain): a native Amazon Bedrock
+> provider, so a deployment inside AWS needs no model-provider API key. See
+> **[FORK.md](FORK.md)** for why it exists, the branch layout, and how to rebase.
+
 # GBrain
 
 **Search gives you raw pages. GBrain gives you the answer.** It's the brain layer your AI agent has been missing — the only one that does synthesis, graph traversal, and gap analysis in one box. Run a full autonomous agent on top of it, or just wire it into Claude Code or Codex as a supercharged retrieval layer in one command; either way your coding agent stops being amnesiac about everything that isn't code.
