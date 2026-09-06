@@ -154,6 +154,24 @@ describe("selectTests", () => {
     expect(select(["src/cli.ts"])).toEqual(ALL_E2E.slice().sort());
   });
 
+  test("an unmapped change forces all tests even beside a mapped change or direct test edit", () => {
+    for (const changes of [
+      ["src/core/search/intent.ts", "src/new-unmapped.ts"],
+      ["src/new-unmapped.ts", "src/core/search/intent.ts"],
+      ["test/e2e/sync.test.ts", "src/new-unmapped.ts"],
+    ]) {
+      expect(select(changes)).toEqual(ALL_E2E.slice().sort());
+    }
+  });
+
+  test("an empty map entry cannot declare an unknown change covered", () => {
+    expect(selectTests({
+      changedFiles: ["src/covered.ts", "src/empty.ts"],
+      allE2ETests: ALL_E2E,
+      map: { "src/covered.ts": ["test/e2e/sync.test.ts"], "src/empty.ts": [] },
+    })).toEqual(ALL_E2E.slice().sort());
+  });
+
   test("case 9: directly-modified test file is included", () => {
     // Touching a test file directly with no other src changes:
     // - test/e2e/foo.test.ts is in changedFiles
