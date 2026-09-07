@@ -156,6 +156,7 @@ describe('renderItemPage', () => {
           mergeable_state: null,
           review_decision: 'APPROVED',
           head: { sha: 'abc123', ref: 'feat/thing' },
+          base: { ref: 'develop' },
         } as GitHubItemData['detail'],
         reviews: [{ user: { login: 'carol' }, state: 'APPROVED', body: 'LGTM, see #88.', submitted_at: '2026-08-02T00:00:00Z' }],
       }),
@@ -164,6 +165,9 @@ describe('renderItemPage', () => {
     expect(page).toContain('status: "merged"');
     expect(page).toContain('merged: true');
     expect(page).toContain('head_ref: "feat/thing"');
+    // `merged: true` alone says merged SOMEWHERE. A Git Flow repo merges to
+    // develop and to master, and only base_ref separates the two.
+    expect(page).toContain('base_ref: "develop"');
     expect(page).toContain('## Reviews');
     expect(page).toContain('[[gh/acme/app/88|#88]]');
     expect(page).toContain('### carol · APPROVED · 2026-08-02T00:00:00Z');
