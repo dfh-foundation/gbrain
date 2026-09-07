@@ -673,6 +673,13 @@ interface RawPullDetail extends RawIssueDetail {
   mergeable_state: string | null;
   review_decision: string | null;
   head: { sha: string; ref: string };
+  // The branch the PR targets. Without it `merged: true` means merged
+  // SOMEWHERE: a Git Flow repo merging to `develop` and to `master` produces
+  // identical pages, and a long-lived `next` branch collecting feature PRs is
+  // indistinguishable from the trunk. Both are questions people actually ask
+  // the brain ("what is on production?"), and neither is answerable from
+  // head_ref alone.
+  base: { ref: string };
 }
 
 export interface GitHubItemData {
@@ -898,6 +905,7 @@ export function renderItemPage(data: GitHubItemData, detailFetched = true): stri
       `mergeable_state: ${yamlStr(pr.mergeable_state ?? '')}`,
       `review_decision: ${yamlStr(reviewDecision)}`,
       `head_ref: ${yamlStr(pr.head?.ref ?? '')}`,
+      `base_ref: ${yamlStr(pr.base?.ref ?? '')}`,
     );
     if (data.checks) {
       frontmatter.push(
@@ -1005,6 +1013,9 @@ export function renderListItemPage(
       mergeable_state: pr.mergeable_state ?? null,
       review_decision: null,
       head: { sha: pr.head?.sha ?? '', ref: '' },
+      // Left blank in the list pass for the same reason as `merged`: the list
+      // payloads do not carry it, and pass 2 fills it from the detail fetch.
+      base: { ref: '' },
     });
   }
   const data: GitHubItemData = {
