@@ -66,6 +66,19 @@ export const bedrock: Recipe = {
         'amazon.titan-embed-text-v2:0': 8192,
       },
 
+      // Item batching is handled below this layer: @ai-sdk/amazon-bedrock
+      // reports maxEmbeddingsPerCall = 96 for Cohere (1 for Titan), and the AI
+      // SDK's embedMany splits on it. What remains is the request payload, which
+      // nothing else bounds — so declare a token budget rather than leave
+      // recursive halving as the only safety net, which is what the gateway
+      // warns about at startup.
+      //
+      // 100k matches the openai recipe, and English prose runs ~4 chars/token.
+      // Cohere Embed v4 accepts 128k tokens in a SINGLE input, so this budget
+      // binds the batch rather than any one chunk.
+      max_batch_tokens: 100_000,
+      chars_per_token: 4,
+
       cost_per_1m_tokens_usd: 0.12,
       price_last_verified: '2026-09-06',
     },
