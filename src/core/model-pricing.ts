@@ -125,22 +125,28 @@ export const CANONICAL_PRICING: Record<string, ModelPricing> = {
   // the half that the meter actually reads, and losing it costs no test and
   // throws no error, only an unguarded spend ceiling.
   //
-  // Rates mirror the first-party table above. `us.anthropic.claude-sonnet-5`
-  // was checked against the Bedrock pricing page on 2026-09-06 at $3/$15,
-  // matching Anthropic list; the rest are carried at the same per-tier rate
-  // rather than left absent. The table feeds a budget ESTIMATE, not billing,
-  // so an approximate rate mis-gates slightly while a missing one does not
-  // gate at all.
+  // Rates read off https://aws.amazon.com/bedrock/pricing/ on 2026-09-09. They
+  // do NOT mirror the first-party table: Bedrock prices Sonnet 5 at $2/$10
+  // against Anthropic's $3/$15 list, so assuming parity over-estimated the one
+  // model this deployment actually runs by 50%. Every other tier matches.
   //
-  // No cache_read/cache_write: the table-integrity test requires non-Anthropic
-  // rows to omit them until that provider's cache pricing is verified, and
-  // Bedrock's is not. Consumers fall back to the full input rate, which
-  // over-estimates a cached read — the safe direction for a spend gate.
+  // No cache_read/cache_write, though Bedrock does publish both — the
+  // table-integrity test requires non-Anthropic rows to omit them, and
+  // patching a shared upstream test is fork surface that conflicts on every
+  // rebase. Consumers fall back to the full input rate, which over-estimates a
+  // cached read; for Sonnet 5 that is $2.00 against a real $0.20, so the gate
+  // is conservative by 10x on cache-heavy work. The published figures, if that
+  // ever needs revisiting (input / 5m write / 1h write / read, $ per 1M):
+  //   fable-5      10.00 / 12.50 / 20.00 / 1.00
+  //   opus-5        5.00 /  6.25 / 10.00 / 0.50
+  //   sonnet-5      2.00 /  2.50 /  4.00 / 0.20
+  //   sonnet-4-6    3.00 /  3.75 /  6.00 / 0.30
+  //   haiku-4-5     1.00 /  1.25 /  2.00 / 0.10
   'bedrock:us.anthropic.claude-fable-5':                    { input: 10.00, output: 50.00 },
   'bedrock:us.anthropic.claude-opus-5':                     { input: 5.00, output: 25.00 },
   'bedrock:us.anthropic.claude-opus-4-8':                   { input: 5.00, output: 25.00 },
   'bedrock:us.anthropic.claude-opus-4-7':                   { input: 5.00, output: 25.00 },
-  'bedrock:us.anthropic.claude-sonnet-5':                   { input: 3.00, output: 15.00 },
+  'bedrock:us.anthropic.claude-sonnet-5':                   { input: 2.00, output: 10.00 },
   'bedrock:us.anthropic.claude-sonnet-4-6':                 { input: 3.00, output: 15.00 },
   'bedrock:us.anthropic.claude-haiku-4-5-20251001-v1:0':    { input: 1.00, output: 5.00 },
 
