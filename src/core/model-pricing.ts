@@ -116,6 +116,34 @@ export const CANONICAL_PRICING: Record<string, ModelPricing> = {
   'anthropic:claude-3-5-sonnet-20241022': anthro( 3.00, 15.00),
   'anthropic:claude-3-5-haiku-20241022':  anthro( 0.80,  4.00),
 
+  // ── Bedrock (fork) ─────────────────────────────────────────────────────
+  // Claude reached through Bedrock inference profiles. Without these keys
+  // canonicalLookup misses at every fallback — the exact key, the
+  // provider-split `bedrock:us.anthropic.…` form, and the case-folded view —
+  // and budget-meter.ts disables the gate with BUDGET_METER_NO_PRICING. The
+  // recipe in src/core/ai/recipes/bedrock.ts already carries the rate; this is
+  // the half that the meter actually reads, and losing it costs no test and
+  // throws no error, only an unguarded spend ceiling.
+  //
+  // Rates mirror the first-party table above. `us.anthropic.claude-sonnet-5`
+  // was checked against the Bedrock pricing page on 2026-09-06 at $3/$15,
+  // matching Anthropic list; the rest are carried at the same per-tier rate
+  // rather than left absent. The table feeds a budget ESTIMATE, not billing,
+  // so an approximate rate mis-gates slightly while a missing one does not
+  // gate at all.
+  //
+  // No cache_read/cache_write: the table-integrity test requires non-Anthropic
+  // rows to omit them until that provider's cache pricing is verified, and
+  // Bedrock's is not. Consumers fall back to the full input rate, which
+  // over-estimates a cached read — the safe direction for a spend gate.
+  'bedrock:us.anthropic.claude-fable-5':                    { input: 10.00, output: 50.00 },
+  'bedrock:us.anthropic.claude-opus-5':                     { input: 5.00, output: 25.00 },
+  'bedrock:us.anthropic.claude-opus-4-8':                   { input: 5.00, output: 25.00 },
+  'bedrock:us.anthropic.claude-opus-4-7':                   { input: 5.00, output: 25.00 },
+  'bedrock:us.anthropic.claude-sonnet-5':                   { input: 3.00, output: 15.00 },
+  'bedrock:us.anthropic.claude-sonnet-4-6':                 { input: 3.00, output: 15.00 },
+  'bedrock:us.anthropic.claude-haiku-4-5-20251001-v1:0':    { input: 1.00, output: 5.00 },
+
   // ── OpenAI ─────────────────────────────────────────────────────────────
   'openai:gpt-4o':                        { input:  2.50, output: 10.00 },
   'openai:gpt-4o-mini':                   { input:  0.15, output:  0.60 },

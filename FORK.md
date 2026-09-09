@@ -1,7 +1,9 @@
 # Why this fork exists
 
 Upstream is [garrytan/gbrain](https://github.com/garrytan/gbrain). This fork
-carries one patch: a native Amazon Bedrock provider.
+carries one patch: a native Amazon Bedrock provider, in two halves that are
+easy to separate by accident — the recipe, and its rows in the canonical
+pricing table.
 
 Designs for Health runs gbrain on an EC2 host inside AWS. Every provider gbrain
 ships needs an API key; Bedrock signs with SigV4, so the host authenticates from
@@ -75,6 +77,20 @@ number rather than taking either side wholesale.
 `ALWAYS_CACHES` set in the "recipes declaring supports_prompt_cache" invariant.
 A conflict here means upstream changed which providers may claim caching —
 re-read that test before resolving.
+
+**The Bedrock rows in `src/core/model-pricing.ts`.** `budget-meter.ts` reads
+`CANONICAL_PRICING`, never the recipe, so a recipe carrying `cost_per_1m_*`
+fields is not enough. With no `bedrock:` key, `canonicalLookup` misses at every
+fallback and the budget gate disables itself with `BUDGET_METER_NO_PRICING` —
+no error, no failing test, just every chat-lane spend ceiling silently gone.
+That is what the fork shipped with until 2026-09-09.
+
+The rows deliberately omit `cache_read`/`cache_write`: the table-integrity test
+requires non-Anthropic rows to omit them until that provider's cache pricing is
+verified, and Bedrock's is not. Consumers fall back to the full input rate,
+which over-estimates a cached read — the safe direction for a gate.
+`test/ai/recipe-bedrock.test.ts` asserts every chat and expansion model in the
+recipe resolves to pricing, so adding a model without a rate now fails.
 
 **`dimsProviderOptions` in `src/core/ai/dims.ts`.** The `native-bedrock` case is
 load-bearing in a way that is easy to lose in a conflict: without it neither the
