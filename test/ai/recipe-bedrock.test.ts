@@ -15,6 +15,7 @@ import { getRecipe } from '../../src/core/ai/recipes/index.ts';
 import { bedrockClientOptions } from '../../src/core/ai/providers/bedrock-credentials.ts';
 import { dimsProviderOptions } from '../../src/core/ai/dims.ts';
 import { canonicalLookup } from '../../src/core/model-pricing.ts';
+import { isEmbedRetriableError } from '../../src/core/embed-retry.ts';
 
 const cfg = (env: Record<string, string | undefined>) => ({ env }) as any;
 
@@ -184,5 +185,31 @@ describe('recipe: bedrock pricing', () => {
     // Omitted deliberately; see the table comment. Consumers fall back to the
     // input rate, which is conservative for a spend gate.
     expect(bedrock.cache_read).toBeUndefined();
+  });
+});
+
+describe('recipe: bedrock transient errors', () => {
+  // The observed failure carried no status code — `undefined:` where the error
+  // name belongs — so none of the 429/502/503/504 patterns matched and 47
+  // chunks failed on the first attempt against a message that says to retry.
+  test('the codeless server error is retriable', () => {
+    const msg = '[embed(bedrock:us.cohere.embed-v4:0)] undefined: The system '
+      + 'encountered an unexpected error during processing. Try your request again.';
+    expect(isEmbedRetriableError(new Error(msg))).toBe(true);
+  });
+
+  // AWS spells these without spaces, so `service unavailable` never matched.
+  test('AWS exception names are retriable', () => {
+    for (const name of ['InternalServerException', 'ServiceUnavailableException', 'ModelNotReadyException']) {
+      expect(isEmbedRetriableError(new Error(`[embed(bedrock:x)] ${name}: boom`)), name).toBe(true);
+    }
+  });
+
+  // Retrying a marketplace-agreement or validation error five times only
+  // delays the report; these must keep failing fast.
+  test('permanent errors stay permanent', () => {
+    for (const name of ['ValidationException', 'AccessDeniedException', 'ResourceNotFoundException']) {
+      expect(isEmbedRetriableError(new Error(`[embed(bedrock:x)] ${name}: nope`)), name).toBe(false);
+    }
   });
 });
