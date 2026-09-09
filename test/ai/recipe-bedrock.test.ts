@@ -5,8 +5,9 @@
  *   - no credential env var is required (SigV4 via the AWS chain)
  *   - model ids are inference profiles, not bare foundation-model ids
  *   - first-party Claude ids alias onto the `us.` profiles
- *   - prompt caching is NOT claimed, because the gateway's cache markers are
- *     Anthropic-keyed and would be dropped in transit
+ *   - prompt caching IS claimed, and the gateway earns it by emitting every
+ *     breakpoint in both spellings — Anthropic `cacheControl` plus Bedrock's
+ *     positional `cachePoint`, the latter only for this recipe
  */
 
 import { describe, expect, test } from 'bun:test';
