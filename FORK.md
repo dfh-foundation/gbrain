@@ -104,6 +104,16 @@ comment beside the rows should that ever need revisiting.
 recipe resolves to pricing, and pins Sonnet 5 below Anthropic list, so both a
 missing rate and a well-meaning "tidy these to match the table above" now fail.
 
+**`isBedrockTransient` in `src/core/embed-retry.ts`.** Bedrock's transient
+server error carries no status code — the message is `undefined: The system
+encountered an unexpected error during processing. Try your request again.` —
+so none of the 429/502/503/504 patterns matched and chunks AWS was telling us to
+retry failed on the first attempt. It also spells its exceptions without spaces
+(`ServiceUnavailableException`), which the `service unavailable` pattern misses.
+Keep the predicate narrow on a rebase: `ValidationException`,
+`AccessDeniedException` and `ResourceNotFoundException` must keep failing fast,
+since retrying a marketplace-agreement error five times only delays the report.
+
 **`dimsProviderOptions` in `src/core/ai/dims.ts`.** The `native-bedrock` case is
 load-bearing in a way that is easy to lose in a conflict: without it neither the
 dimension request nor the query/document signal reaches the provider, and
