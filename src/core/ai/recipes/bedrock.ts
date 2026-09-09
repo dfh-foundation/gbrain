@@ -114,11 +114,17 @@ export const bedrock: Recipe = {
         'us.anthropic.claude-opus-4-7': 1_000_000,
       },
       max_context_tokens: 200000,
-      // Bedrock is partner-priced and differs from the first-party API; these
-      // are sonnet-class list rates. See https://aws.amazon.com/bedrock/pricing/
-      cost_per_1m_input_usd: 3.0,
-      cost_per_1m_output_usd: 15.0,
-      price_last_verified: '2026-09-06',
+      // Bedrock is partner-priced and differs from the first-party API — Sonnet
+      // 5 is $2/$10 here against Anthropic's $3/$15 list, which is the whole
+      // reason not to assume parity. Sonnet-class rates for the default chat
+      // model. See https://aws.amazon.com/bedrock/pricing/
+      //
+      // These fields are documentation: budget-meter.ts reads CANONICAL_PRICING
+      // in src/core/model-pricing.ts, never a recipe. Both halves have to move
+      // together.
+      cost_per_1m_input_usd: 2.0,
+      cost_per_1m_output_usd: 10.0,
+      price_last_verified: '2026-09-09',
     },
   },
   // Accept the first-party model ids as aliases for the `us.` profiles, so a

@@ -85,12 +85,24 @@ fallback and the budget gate disables itself with `BUDGET_METER_NO_PRICING` —
 no error, no failing test, just every chat-lane spend ceiling silently gone.
 That is what the fork shipped with until 2026-09-09.
 
-The rows deliberately omit `cache_read`/`cache_write`: the table-integrity test
-requires non-Anthropic rows to omit them until that provider's cache pricing is
-verified, and Bedrock's is not. Consumers fall back to the full input rate,
-which over-estimates a cached read — the safe direction for a gate.
+**Do not assume Bedrock matches Anthropic list pricing.** It does not: Sonnet 5
+is $2/$10 on Bedrock against Anthropic's $3/$15, and mirroring the first-party
+table over-estimated the deployed chat model by 50%. Every other Claude tier
+happens to match, which makes the one exception easy to miss. Read the rates off
+<https://aws.amazon.com/bedrock/pricing/> rather than inferring them, and note
+that upstream's Anthropic row carries list rates with launch discounts
+deliberately unmodelled — so the two tables disagree by design.
+
+The rows omit `cache_read`/`cache_write` even though Bedrock publishes both. The
+table-integrity test requires non-Anthropic rows to omit them, and patching a
+shared upstream test is fork surface that conflicts on every rebase. Consumers
+fall back to the full input rate, which over-estimates a cached read — the safe
+direction for a gate, if a coarse one. The published figures are recorded in a
+comment beside the rows should that ever need revisiting.
+
 `test/ai/recipe-bedrock.test.ts` asserts every chat and expansion model in the
-recipe resolves to pricing, so adding a model without a rate now fails.
+recipe resolves to pricing, and pins Sonnet 5 below Anthropic list, so both a
+missing rate and a well-meaning "tidy these to match the table above" now fail.
 
 **`dimsProviderOptions` in `src/core/ai/dims.ts`.** The `native-bedrock` case is
 load-bearing in a way that is easy to lose in a conflict: without it neither the

@@ -172,14 +172,16 @@ describe('recipe: bedrock pricing', () => {
     }
   });
 
-  // Token rates only. The Bedrock rows deliberately omit cache_read/cache_write
-  // — the table-integrity test requires non-Anthropic rows to omit them until
-  // that provider's cache pricing is verified, and Bedrock's is not.
-  test('the configured chat model carries the first-party token rate', () => {
+  // Bedrock is NOT the first-party rate, and assuming it was over-estimated
+  // this deployment's chat model by 50%. Pinned against a future edit that
+  // "tidies" the fork rows to match the Anthropic table above.
+  test('sonnet-5 carries the Bedrock rate, which is below Anthropic list', () => {
     const bedrock = canonicalLookup('bedrock:us.anthropic.claude-sonnet-5')!;
-    const first = canonicalLookup('anthropic:claude-sonnet-5')!;
-    expect(bedrock.input).toBe(first.input);
-    expect(bedrock.output).toBe(first.output);
+    expect(bedrock.input).toBe(2.0);
+    expect(bedrock.output).toBe(10.0);
+    expect(bedrock.input).toBeLessThan(canonicalLookup('anthropic:claude-sonnet-5')!.input);
+    // Omitted deliberately; see the table comment. Consumers fall back to the
+    // input rate, which is conservative for a spend gate.
     expect(bedrock.cache_read).toBeUndefined();
   });
 });
