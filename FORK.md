@@ -17,7 +17,7 @@ the fork is permanent until told otherwise.
 
 ## Branch layout
 
-`feat/bedrock-provider` branches off the **`v0.48.2.0` tag**, not `master`.
+`feat/bedrock-provider` branches off the **`v0.48.5.0` tag**, not `master`.
 
 That is deliberate. The consumer pins an exact commit, so the deployed tree
 should be a released upstream tag plus this patch and nothing else — `master`
@@ -36,7 +36,7 @@ Nothing else references this fork.
 
 ```sh
 git fetch upstream --tags
-git rebase --onto v0.<new> v0.48.2.0 feat/bedrock-provider
+git rebase --onto v0.<new> v0.48.5.0 feat/bedrock-provider
 ```
 
 Then re-verify. All of these must pass before the tip is pinned:
