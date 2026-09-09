@@ -13,6 +13,7 @@ import { describe, expect, test } from 'bun:test';
 import { getRecipe } from '../../src/core/ai/recipes/index.ts';
 import { bedrockClientOptions } from '../../src/core/ai/providers/bedrock-credentials.ts';
 import { dimsProviderOptions } from '../../src/core/ai/dims.ts';
+import { canonicalLookup } from '../../src/core/model-pricing.ts';
 
 const cfg = (env: Record<string, string | undefined>) => ({ env }) as any;
 
@@ -151,5 +152,34 @@ describe('bedrock embedding provider options', () => {
     // The provider detects family with modelId.includes("cohere.embed-"), and
     // the recipe's default model carries a us. prefix.
     expect(opts('us.cohere.embed-v4:0', 1024).bedrock.inputType).toBeDefined();
+  });
+});
+
+describe('recipe: bedrock pricing', () => {
+  // Without a canonical entry the budget meter disables itself with
+  // BUDGET_METER_NO_PRICING and every chat-lane spend ceiling stops applying —
+  // silently, because a missing price throws nothing. The recipe's own
+  // cost fields are not what the meter reads.
+  test('every chat and expansion model resolves to canonical pricing', () => {
+    const tp = getRecipe('bedrock')!.touchpoints;
+    const ids = [...(tp.chat?.models ?? []), ...(tp.expansion?.models ?? [])];
+    expect(ids.length).toBeGreaterThan(0);
+    for (const id of ids) {
+      const pricing = canonicalLookup(`bedrock:${id}`);
+      expect(pricing, `no canonical pricing for bedrock:${id}`).toBeDefined();
+      expect(pricing!.input).toBeGreaterThan(0);
+      expect(pricing!.output).toBeGreaterThan(0);
+    }
+  });
+
+  // Token rates only. The Bedrock rows deliberately omit cache_read/cache_write
+  // — the table-integrity test requires non-Anthropic rows to omit them until
+  // that provider's cache pricing is verified, and Bedrock's is not.
+  test('the configured chat model carries the first-party token rate', () => {
+    const bedrock = canonicalLookup('bedrock:us.anthropic.claude-sonnet-5')!;
+    const first = canonicalLookup('anthropic:claude-sonnet-5')!;
+    expect(bedrock.input).toBe(first.input);
+    expect(bedrock.output).toBe(first.output);
+    expect(bedrock.cache_read).toBeUndefined();
   });
 });
