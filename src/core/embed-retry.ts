@@ -259,7 +259,37 @@ export function isEmbedRetriableError(e: unknown): boolean {
     detect429FromCause(e) ||
     detectGatewayErrorFromCause(e) ||
     /rate.?limit|429/i.test(msg) ||
-    /bad gateway|502|503|504|service unavailable|gateway timeout/i.test(msg)
+    /bad gateway|502|503|504|service unavailable|gateway timeout/i.test(msg) ||
+    isBedrockTransient(msg)
+  );
+}
+
+/**
+ * Fork: Bedrock's transient server errors, which none of the patterns above
+ * match.
+ *
+ * Two shapes. The prose one carries no status code at all — the observed
+ * message is literally
+ *
+ *   [embed(bedrock:us.cohere.embed-v4:0)] undefined: The system encountered an
+ *   unexpected error during processing. Try your request again.
+ *
+ * with `undefined` where an error name would be, so a chunk that AWS is telling
+ * us to retry was classified permanent and failed on the first attempt. 47
+ * chunks were lost that way in a single cycle.
+ *
+ * The named one is a spacing miss: AWS spells its exceptions
+ * `ServiceUnavailableException` and `ModelNotReadyException`, and the
+ * `service unavailable` pattern above requires a space, so it never matched.
+ *
+ * Deliberately narrow. `ValidationException`, `AccessDeniedException` and
+ * `ResourceNotFoundException` are permanent and must keep failing fast —
+ * retrying a marketplace-agreement error five times just delays the report.
+ */
+function isBedrockTransient(msg: string): boolean {
+  return (
+    /unexpected error during processing|try your request again/i.test(msg) ||
+    /InternalServerException|ServiceUnavailableException|ModelNotReadyException/.test(msg)
   );
 }
 
