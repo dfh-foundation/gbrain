@@ -404,8 +404,21 @@ function maybeEmitUpdateMarker(command: string): void {
         if (!process.stderr.isTTY || process.env.GBRAIN_FORCE_UPGRADE_MARKER === '1') {
           process.stderr.write(`UPGRADE_AVAILABLE ${VERSION} ${latest}\n`);
         }
+        // GBRAIN_MANAGED_INSTALL_HINT: an install owned by an external package
+        // manager (Nix, a container image, a system package) replaces the
+        // remedy without losing the signal. `self-upgrade` on such an install
+        // writes over files the manager believes it owns, and the manager will
+        // not necessarily notice — so pointing every user at it is pointing
+        // them at a way to break their own deployment. That a newer version
+        // exists is still worth printing; only the instruction changes.
+        //
+        // The machine marker above is deliberately NOT touched. The
+        // self-upgrade skill and MCP parse `UPGRADE_AVAILABLE <cur> <latest>`,
+        // and a managed install still wants agents to know a version exists —
+        // it just wants a human to do the upgrading.
+        const hint = process.env.GBRAIN_MANAGED_INSTALL_HINT?.trim();
         process.stderr.write(
-          `gbrain ${VERSION} -> ${latest} available. Run: gbrain self-upgrade\n`,
+          `gbrain ${VERSION} -> ${latest} available. ${hint || 'Run: gbrain self-upgrade'}\n`,
         );
       }
       return;
@@ -2250,6 +2263,34 @@ async function handleCliOnly(command: string, args: string[]) {
     return;
   }
   if (command === 'self-upgrade') {
+    // Refuse on an externally managed install. The notice in checkForUpdates
+    // stops this being SUGGESTED; only this stops someone who runs it from
+    // memory, from an older shell history, or from a doc written before the
+    // install was managed — which is the likelier route, since the person who
+    // reads the notice is the one already paying attention.
+    //
+    // The escape hatch is unsetting the variable, NOT a flag. `--force` already
+    // means "apply even if not behind" here (self-upgrade.ts:17), so reusing it
+    // would give one flag two unrelated meanings and quietly disarm this guard
+    // for anyone who reached for --force because the command looked stuck —
+    // which is the accident the guard exists to prevent. A new flag is no
+    // better: the pre-dispatch validator rejects flags absent from
+    // cli-flag-registry.generated.ts, so it would mean editing generated code
+    // and carrying that on every rebase.
+    //
+    // Unsetting is also the more honest gesture. Where the manager exports the
+    // variable through a wrapper, going around it means invoking the real
+    // binary directly — which is precisely what overriding a managed install
+    // is, stated out loud rather than spelled as a flag.
+    const managedHint = process.env.GBRAIN_MANAGED_INSTALL_HINT?.trim();
+    if (managedHint) {
+      process.stderr.write(
+        `gbrain self-upgrade: this install is managed externally.\n${managedHint}\n` +
+        `To override, run with GBRAIN_MANAGED_INSTALL_HINT unset.\n`,
+      );
+      setCliExitVerdict(1);
+      return;
+    }
     const { runSelfUpgrade } = await import('./commands/self-upgrade.ts');
     await runSelfUpgrade(args);
     return;
