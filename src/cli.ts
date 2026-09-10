@@ -240,8 +240,21 @@ function maybeEmitUpdateMarker(command: string): void {
         if (!process.stderr.isTTY || process.env.GBRAIN_FORCE_UPGRADE_MARKER === '1') {
           process.stderr.write(`UPGRADE_AVAILABLE ${VERSION} ${latest}\n`);
         }
+        // GBRAIN_MANAGED_INSTALL_HINT: an install owned by an external package
+        // manager (Nix, a container image, a system package) replaces the
+        // remedy without losing the signal. `self-upgrade` on such an install
+        // writes over files the manager believes it owns, and the manager will
+        // not necessarily notice — so pointing every user at it is pointing
+        // them at a way to break their own deployment. That a newer version
+        // exists is still worth printing; only the instruction changes.
+        //
+        // The machine marker above is deliberately NOT touched. The
+        // self-upgrade skill and MCP parse `UPGRADE_AVAILABLE <cur> <latest>`,
+        // and a managed install still wants agents to know a version exists —
+        // it just wants a human to do the upgrading.
+        const hint = process.env.GBRAIN_MANAGED_INSTALL_HINT?.trim();
         process.stderr.write(
-          `gbrain ${VERSION} -> ${latest} available. Run: gbrain self-upgrade\n`,
+          `gbrain ${VERSION} -> ${latest} available. ${hint || 'Run: gbrain self-upgrade'}\n`,
         );
       }
       return;

@@ -138,3 +138,39 @@ Confirm what an account can actually reach with:
 ```sh
 aws bedrock list-inference-profiles --region <region>
 ```
+
+## Managed-install hint
+
+`GBRAIN_MANAGED_INSTALL_HINT` is a fork addition, and the only delta here that
+is not about Bedrock.
+
+Upstream assumes gbrain owns its own install: the version notice ends `Run:
+gbrain self-upgrade`, and the command overwrites the install in place. That is
+wrong for any install a package manager owns. On the DFH host, `gbrain-install`
+installs from a pinned revision and records it in `/var/lib/gbrain/rev`;
+`self-upgrade` replaces the install without touching that marker, so the unit's
+guard would keep reporting `gbrain already at <pinned rev>` over an upstream
+build, indefinitely and through every `nixos-rebuild`. The Bedrock pricing rows
+and the transient-error retry both live here, so the visible symptom would be
+budget-meter refusals and unretried failures with nothing naming the cause.
+
+Set the variable to a sentence saying how to upgrade instead. Two effects:
+
+1. The version notice prints that sentence in place of `Run: gbrain
+   self-upgrade`. The `UPGRADE_AVAILABLE <cur> <latest>` machine marker is
+   untouched, so the self-upgrade skill and MCP still see new versions — a
+   managed install wants the signal, just not the command.
+2. `gbrain self-upgrade` refuses, prints the hint, and exits 1. The override is
+   unsetting the variable, not a flag: `--force` already means "apply even if
+   not behind" in that command, and a new flag would have to be added to
+   `cli-flag-registry.generated.ts`, whose pre-dispatch validator rejects
+   anything absent from it.
+
+Unset, both behave exactly as upstream. The change is written to be
+upstreamable — nothing in it is DFH-specific, and the same problem applies to
+Homebrew, a container image or a distro package.
+
+The matching repair lives in `hosts/brain/gbrain.nix` in the `brain` repo: the
+install guard compares the version the binary reports against one recorded at
+install time, so an install replaced by any means is detected and rebuilt. Keep
+both. This stops the mistake; that one recovers from it.
