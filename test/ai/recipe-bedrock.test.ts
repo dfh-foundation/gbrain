@@ -16,6 +16,8 @@ import { bedrockClientOptions } from '../../src/core/ai/providers/bedrock-creden
 import { dimsProviderOptions } from '../../src/core/ai/dims.ts';
 import { canonicalLookup } from '../../src/core/model-pricing.ts';
 import { isEmbedRetriableError } from '../../src/core/embed-retry.ts';
+import { isThinkingByDefaultModel } from '../../src/core/ai/gateway.ts';
+import { maxOutputTokensFor } from '../../src/core/think/index.ts';
 
 const cfg = (env: Record<string, string | undefined>) => ({ env }) as any;
 
@@ -211,5 +213,51 @@ describe('recipe: bedrock transient errors', () => {
     for (const name of ['ValidationException', 'AccessDeniedException', 'ResourceNotFoundException']) {
       expect(isEmbedRetriableError(new Error(`[embed(bedrock:x)] ${name}: nope`)), name).toBe(false);
     }
+  });
+});
+
+describe('bedrock inference-profile ids and output caps', () => {
+  // Bedrock inference-profile ids are DOTTED (`us.anthropic.claude-sonnet-5`)
+  // where every other spelling is colon/slash delimited. Both output-cap
+  // predicates keyed on a separator class that omitted `.`, so every Bedrock
+  // Claude id fell through to the conservative default while the identical
+  // first-party id got the raised one. Claude 5 spends output budget on
+  // reasoning, so `gbrain think` truncated its JSON envelope mid-answer and
+  // reported LLM_OUTPUT_TRUNCATED + SALVAGED_ANSWER_FROM_MALFORMED_JSON.
+  const profileIds = [
+    'bedrock:us.anthropic.claude-sonnet-5',
+    'bedrock:us.anthropic.claude-opus-5',
+    'bedrock:eu.anthropic.claude-sonnet-5',
+    'bedrock:global.anthropic.claude-fable-5',
+    'us.anthropic.claude-sonnet-5',
+  ];
+
+  test.each(profileIds)('%s is a thinking model', (id) => {
+    expect(isThinkingByDefaultModel(id)).toBe(true);
+  });
+
+  test.each(profileIds)('%s gets the raised think cap', (id) => {
+    expect(maxOutputTokensFor(id)).toBeGreaterThan(maxOutputTokensFor('openai:gpt-4o'));
+  });
+
+  test('the raised cap matches what the first-party spelling already got', () => {
+    expect(maxOutputTokensFor('bedrock:us.anthropic.claude-sonnet-5'))
+      .toBe(maxOutputTokensFor('anthropic:claude-sonnet-5'));
+  });
+
+  test('Bedrock 4.x profile ids get it too', () => {
+    expect(maxOutputTokensFor('bedrock:us.anthropic.claude-sonnet-4-6'))
+      .toBe(maxOutputTokensFor('anthropic:claude-sonnet-4-6'));
+  });
+
+  // The guard that must survive the widened separator class. The 3.5 family is
+  // capped at 8192 upstream and raising it 400s, so the letters-only family
+  // segment has to keep excluding `claude-3-5-*` on the dotted spelling too —
+  // `3` is not `[a-z]`.
+  test.each([
+    'anthropic:claude-3-5-sonnet-20241022',
+    'bedrock:us.anthropic.claude-3-5-sonnet-20241022-v2:0',
+  ])('%s is NOT treated as a thinking model', (id) => {
+    expect(isThinkingByDefaultModel(id)).toBe(false);
   });
 });
