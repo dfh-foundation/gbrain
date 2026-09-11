@@ -139,6 +139,37 @@ Confirm what an account can actually reach with:
 aws bedrock list-inference-profiles --region <region>
 ```
 
+## Bedrock inference-profile ids and output caps
+
+Bedrock inference-profile ids are **dotted** — `bedrock:us.anthropic.claude-sonnet-5`
+— where every other spelling gbrain knows is colon or slash delimited. Two
+output-cap predicates keyed on a separator class that omitted `.`:
+
+- `THINKING_BY_DEFAULT_MODEL_RE` (`src/core/ai/gateway.ts`), the single source
+  of truth behind `isThinkingModel`
+- `ANTHROPIC_CLAUDE_4X_MODEL_RE` (`src/core/think/index.ts`)
+
+So every Bedrock Claude id failed both while the identical first-party id
+passed, and the brain silently took the conservative default everywhere the cap
+is decided: `think` synthesis, `defaultMaxOutputTokens`, `synthesize_concepts`,
+and the subagent handler `synthesize` runs on.
+
+Claude 5 spends output budget on reasoning tokens, so the visible symptom was
+`gbrain think` truncating its JSON envelope mid-answer and returning
+`LLM_OUTPUT_TRUNCATED`, `SALVAGED_ANSWER_FROM_MALFORMED_JSON` and
+`CITATIONS_REGEX_FALLBACK` — which reads as a model-output bug rather than as a
+cap that was never raised. The code comment at the truncation site says to raise
+the budget; the budget was there, and the model id simply never matched.
+
+Both separator classes now include `.`. The letters-only family segment is what
+keeps `claude-3-5-sonnet-*` out — that family is capped at 8192 upstream and
+raising it returns 400 — and it still does on the dotted spelling, since `3` is
+not `[a-z]`. `test/ai/recipe-bedrock.test.ts` pins both directions, and the
+tests were confirmed to fail against the unfixed source rather than assumed to.
+
+Upstreamable as written: nothing about it is DFH-specific, and it affects any
+Bedrock deployment.
+
 ## Managed-install hint
 
 `GBRAIN_MANAGED_INSTALL_HINT` is a fork addition, and the only delta here that

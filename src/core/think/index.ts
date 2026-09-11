@@ -239,7 +239,13 @@ const OPENAI_CHAT_SNAPSHOT_RE = /-chat(?:-|$)/i; // gpt-5-chat-latest, gpt-5.2-c
 // truncates mid-stream. Anthropic-scoped only (same spelling variants as
 // THINKING_BY_DEFAULT_MODEL_RE), so provider hard caps (DeepSeek 8192,
 // gpt-4o) are unaffected; providers bill actual tokens, not the cap.
-const ANTHROPIC_CLAUDE_4X_MODEL_RE = /(?:^|[:/])(?:anthropic[:/])?claude-(?:opus|sonnet|haiku)-4-\d/i;
+//
+// The separator class includes `.` for the same reason as
+// THINKING_BY_DEFAULT_MODEL_RE — Bedrock inference-profile ids are dotted
+// (`bedrock:us.anthropic.claude-sonnet-4-6`), so without it every Bedrock 4.x
+// id fell through to the conservative default and truncated exactly the
+// envelope this constant exists to protect.
+const ANTHROPIC_CLAUDE_4X_MODEL_RE = /(?:^|[:/.])(?:anthropic[:/.])?claude-(?:opus|sonnet|haiku)-4-\d/i;
 export function maxOutputTokensFor(modelStr: string): number {
   const openaiReasoning =
     OPENAI_REASONING_MODEL_RE.test(modelStr) && !OPENAI_CHAT_SNAPSHOT_RE.test(modelStr);
