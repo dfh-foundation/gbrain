@@ -3239,7 +3239,21 @@ export const THINKING_MODEL_MAX_OUTPUT_TOKENS = 32000;
 // `claude-cli:claude-fable-5`, bare `claude-sonnet-5`). The family segment is
 // letters-only so `claude-3-5-sonnet-*` (an 8192-capped 3.5-family id) can
 // never match — pushing 32k onto it would 400 on Anthropic.
-const THINKING_BY_DEFAULT_MODEL_RE = /(?:^|[:/])(?:anthropic[:/])?claude-[a-z]+-5(?:[.-]|$)/i;
+//
+// The separator class includes `.` for Bedrock inference profiles, whose ids
+// are dotted rather than colon/slash delimited:
+// `bedrock:us.anthropic.claude-sonnet-5`. Without it EVERY Bedrock Claude 5 id
+// failed this predicate while every other spelling passed, so a Bedrock brain
+// silently took DEFAULT_MAX_OUTPUT_TOKENS everywhere the cap is decided —
+// think synthesis, defaultMaxOutputTokens, synthesize_concepts and the
+// subagent handler. Claude 5 spends output budget on reasoning tokens, so the
+// symptom was `gbrain think` truncating its JSON envelope mid-answer and
+// falling back to salvage + regex citations, which reads as a model-output bug
+// rather than as a cap that was never raised.
+//
+// The letters-only family segment is what keeps `claude-3-5-sonnet-*` out, and
+// it still does on the dotted spelling — `3` is not `[a-z]`.
+const THINKING_BY_DEFAULT_MODEL_RE = /(?:^|[:/.])(?:anthropic[:/.])?claude-[a-z]+-5(?:[.-]|$)/i;
 export function isThinkingByDefaultModel(modelStr: string | undefined): boolean {
   return !!modelStr && THINKING_BY_DEFAULT_MODEL_RE.test(modelStr);
 }
