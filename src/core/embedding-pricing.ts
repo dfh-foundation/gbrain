@@ -34,6 +34,17 @@ export const EMBEDDING_PRICING: Record<string, EmbeddingPricing> = {
   'openai:text-embedding-3-small': { pricePerMTok: 0.02 },
   // Legacy OpenAI ada (still common in older brains)
   'openai:text-embedding-ada-002': { pricePerMTok: 0.10 },
+  // Bedrock (fork addition). The same rate already lives in the embedding recipe
+  // in ai/recipes/bedrock.ts, where it sizes batches; this copy is what the
+  // budget tracker reads. Without it every embedding call prices as zero, so a
+  // per-client budget_usd_per_day never trips on embedding spend.
+  //
+  // Verified 2026-09-06 against https://aws.amazon.com/bedrock/pricing/. There
+  // is no programmatic source to re-check it: the AWS Pricing API lists no
+  // Cohere provider under AmazonBedrock (partner-priced), and the public page
+  // tabulates Embed 3 at 0.10 without an Embed 4 row. Re-verify by hand.
+  'bedrock:us.cohere.embed-v4:0':  { pricePerMTok: 0.12 },
+  'bedrock:cohere.embed-v4:0':     { pricePerMTok: 0.12 },
   // Voyage (https://docs.voyageai.com/docs/pricing, verified 2026-08-21)
   'voyage:voyage-4-large':         { pricePerMTok: 0.12 },
   'voyage:voyage-4':               { pricePerMTok: 0.06 },
