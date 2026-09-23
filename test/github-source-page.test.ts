@@ -23,6 +23,7 @@ import {
   AppTokenProvider,
   type GitHubItemData,
 } from '../src/core/github-source.ts';
+import { BOT_COMMENT_MAX_BYTES } from '../src/core/github-bot-comments.ts';
 import { extractGitHubItemRef } from '../src/commands/serve-http.ts';
 import { GitHubClient } from '../src/core/github-source.ts';
 
@@ -213,6 +214,80 @@ describe('renderItemPage', () => {
     expect(page).toContain('## Review comments');
     expect(page).toContain('[[gh/acme/app/89|#89]]');
     expect(page).toContain('### dave · src/app.ts:41 · 2026-08-02T02:00:00Z');
+  });
+});
+
+describe('renderItemPage bot comments', () => {
+  const log = 'Refreshing state... [id=abc]\n'.repeat(500); // ~14 KB
+  const at = '2026-08-03T00:00:00Z';
+
+  test('a large bot comment renders as a stub under its heading', () => {
+    const page = renderItemPage(
+      baseItemData({ comments: [{ user: { login: 'github-actions[bot]' }, body: log, created_at: at }] }),
+    );
+    expect(page).toContain(`### github-actions[bot] · ${at}`);
+    expect(page).toContain('_(bot comment, 14 KB, omitted)_');
+    expect(page).not.toContain('Refreshing state');
+  });
+
+  test('a short bot comment stays verbatim', () => {
+    const notice = 'This pull request has been linked to a tracker issue.';
+    const page = renderItemPage(
+      baseItemData({ comments: [{ user: { login: 'tracker[bot]' }, body: notice, created_at: at }] }),
+    );
+    expect(page).toContain(notice);
+    expect(page).not.toContain('omitted');
+  });
+
+  test('a bot is recognised by user.type without the login suffix', () => {
+    const page = renderItemPage(
+      baseItemData({ comments: [{ user: { login: 'deploy-app', type: 'Bot' }, body: log, created_at: at }] }),
+    );
+    expect(page).not.toContain('Refreshing state');
+  });
+
+  test('a large human comment is never stubbed', () => {
+    const page = renderItemPage(
+      baseItemData({ comments: [{ user: { login: 'bob' }, body: log, created_at: at }] }),
+    );
+    expect(page).toContain('Refreshing state');
+  });
+
+  test('the limit is inclusive and counts UTF-8 bytes', () => {
+    // Three bytes per character, so this is over the limit in bytes while
+    // being well under it in characters.
+    const wide = '✓'.repeat(Math.ceil(BOT_COMMENT_MAX_BYTES / 3) + 1);
+    const exact = 'x'.repeat(BOT_COMMENT_MAX_BYTES);
+    const page = renderItemPage(
+      baseItemData({
+        comments: [
+          { user: { login: 'preview[bot]' }, body: wide, created_at: at },
+          { user: { login: 'preview[bot]' }, body: exact, created_at: at },
+        ],
+      }),
+    );
+    expect(page).not.toContain(wide);
+    expect(page).toContain(exact);
+  });
+
+  test('bot reviews and review comments stay verbatim', () => {
+    const page = renderItemPage(
+      baseItemData({
+        reviews: [{ user: { login: 'ci[bot]' }, state: 'COMMENTED', body: log, submitted_at: at }],
+        reviewComments: [
+          {
+            user: { login: 'ci[bot]' },
+            body: log,
+            created_at: at,
+            path: 'src/app.ts',
+            line: 1,
+            original_line: null,
+          },
+        ],
+      }),
+    );
+    expect(page.match(/Refreshing state/g)?.length).toBe(1000);
+    expect(page).toContain('### ci[bot] · src/app.ts:1');
   });
 });
 

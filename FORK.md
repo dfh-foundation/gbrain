@@ -1,9 +1,11 @@
 # Why this fork exists
 
-Upstream is [garrytan/gbrain](https://github.com/garrytan/gbrain). This fork
-carries one patch: a native Amazon Bedrock provider, in two halves that are
-easy to separate by accident — the recipe, and its rows in the canonical
-pricing table.
+Upstream is [garrytan/gbrain](https://github.com/garrytan/gbrain). This fork's
+main patch is a native Amazon Bedrock provider, in two halves that are easy to
+separate by accident — the recipe, and its rows in the canonical pricing table.
+Two smaller deltas follow it: the
+[managed-install hint](#managed-install-hint) and
+[GitHub pull request pages](#github-pull-request-pages).
 
 Designs for Health runs gbrain on an EC2 host inside AWS. Every provider gbrain
 ships needs an API key; Bedrock signs with SigV4, so the host authenticates from
@@ -46,7 +48,7 @@ Then re-verify. All of these must pass before the tip is pinned:
 ```sh
 bun install
 bun run typecheck
-bun test test/ai/
+bun test test/ai/ test/github-source-page.test.ts
 bun run check:module-size
 bun run check:gateway-routed
 bun run check:exports-count
@@ -172,8 +174,7 @@ Bedrock deployment.
 
 ## Managed-install hint
 
-`GBRAIN_MANAGED_INSTALL_HINT` is a fork addition, and the only delta here that
-is not about Bedrock.
+`GBRAIN_MANAGED_INSTALL_HINT` is a fork addition, and not about Bedrock.
 
 Upstream assumes gbrain owns its own install: the version notice ends `Run:
 gbrain self-upgrade`, and the command overwrites the install in place. That is
@@ -205,3 +206,31 @@ The matching repair lives in `hosts/brain/gbrain.nix` in the `brain` repo: the
 install guard compares the version the binary reports against one recorded at
 install time, so an install replaced by any means is detected and rebuilt. Keep
 both. This stops the mistake; that one recovers from it.
+
+## GitHub pull request pages
+
+Two changes to how the `github` source renders an item page, neither
+DFH-specific.
+
+**`base_ref` in PR frontmatter.** `merged: true` alone means merged somewhere, so
+a Git Flow repo's merges to `develop` and to `master` produce identical pages.
+The field was already in the API response and dropped during parsing.
+
+**Large bot comments render as a stub.** A bot's issue comment over
+`BOT_COMMENT_MAX_BYTES` (1 KB) renders as `_(bot comment, 13 KB, omitted)_` under
+its usual heading. Shorter ones stay verbatim, and so do reviews and review
+comments, where AI reviewers post real findings. The logic lives in `src/core/github-bot-comments.ts`, so
+`github-source.ts` grows by one import against its module-size ceiling.
+
+Measured on the DFH host on 2026-09-23 before the change: bot comments were
+53.8 of 110.4 MB across 13,158 rendered pages, and 289 of the 362 pages over
+content-sanity's 50 KB warn threshold were over it only because of them. Both
+are lower bounds: the pass that produced them lost attribution wherever a bot's
+comment body carried a heading of its own, which every deploy result does. Three
+branch-deploy PRs
+were past the 500 KB embed-skip limit on bot output alone, which removed their
+chunks and hid the human discussion along with the deploy logs.
+
+The change applies to a page when its item is next fetched. Pages already on
+disk keep their bot content until a webhook delivery or a sweep re-renders
+them.
