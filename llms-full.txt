@@ -3191,6 +3191,12 @@ These apply to ALL brain-writing skills:
 
 Source: https://raw.githubusercontent.com/garrytan/gbrain/master/README.md
 
+> **This is a fork** of upstream
+> [garrytan/gbrain](https://github.com/garrytan/gbrain). Its main patch is a
+> native Amazon Bedrock provider, so a deployment inside AWS needs no
+> model-provider API key. See
+> **[FORK.md](FORK.md)** for why it exists, the branch layout, and how to rebase.
+
 # GBrain
 
 **Give the agent you already use a memory you control.** GBrain stores explicit facts with their sources, supports corrections and withdrawal, and makes the same memory available across your agents. Start with keyless memory and keyword retrieval; add semantic search, synthesis, and background enrichment when you need them.
@@ -6282,8 +6288,8 @@ repos are acknowledged but never materialized.
 - Frontmatter: kind, repo, number, title, state, status (merged/draft/
   open/closed), review decision, checks pass/fail/pending counts, labels,
   assignees, milestone, URL, `updated_at`, `synced_at`, linked items.
-- Body: description, every comment, reviews, review comments with file and
-  line references. `#<n>` mentions and Closes/Fixes/Resolves references
+- Body: description, comments (a bot's comment over 1 KB becomes a stub),
+  reviews, review comments with file and line references. `#<n>` mentions and Closes/Fixes/Resolves references
   become wikilinks, so graph traversal works across the whole history.
 
 ## Retrieval
