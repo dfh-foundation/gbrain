@@ -1836,6 +1836,12 @@ These apply to ALL brain-writing skills:
 
 Source: https://raw.githubusercontent.com/garrytan/gbrain/master/README.md
 
+> **This is a fork** of upstream
+> [garrytan/gbrain](https://github.com/garrytan/gbrain). Its main patch is a
+> native Amazon Bedrock provider, so a deployment inside AWS needs no
+> model-provider API key. See
+> **[FORK.md](FORK.md)** for why it exists, the branch layout, and how to rebase.
+
 # GBrain
 
 **Search gives you raw pages. GBrain gives you the answer.** It's the brain layer your AI agent has been missing — the only one that does synthesis, graph traversal, and gap analysis in one box. Run a full autonomous agent on top of it, or just wire it into Claude Code or Codex as a supercharged retrieval layer in one command; either way your coding agent stops being amnesiac about everything that isn't code.
@@ -4856,8 +4862,8 @@ repos are acknowledged but never materialized.
 - Frontmatter: kind, repo, number, title, state, status (merged/draft/
   open/closed), review decision, checks pass/fail/pending counts, labels,
   assignees, milestone, URL, `updated_at`, `synced_at`, linked items.
-- Body: description, every comment, reviews, review comments with file and
-  line references. `#<n>` mentions and Closes/Fixes/Resolves references
+- Body: description, comments (a bot's comment over 1 KB becomes a stub),
+  reviews, review comments with file and line references. `#<n>` mentions and Closes/Fixes/Resolves references
   become wikilinks, so graph traversal works across the whole history.
 
 ## Retrieval

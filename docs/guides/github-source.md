@@ -117,8 +117,8 @@ repos are acknowledged but never materialized.
 - Frontmatter: kind, repo, number, title, state, status (merged/draft/
   open/closed), review decision, checks pass/fail/pending counts, labels,
   assignees, milestone, URL, `updated_at`, `synced_at`, linked items.
-- Body: description, every comment, reviews, review comments with file and
-  line references. `#<n>` mentions and Closes/Fixes/Resolves references
+- Body: description, comments (a bot's comment over 1 KB becomes a stub),
+  reviews, review comments with file and line references. `#<n>` mentions and Closes/Fixes/Resolves references
   become wikilinks, so graph traversal works across the whole history.
 
 ## Retrieval

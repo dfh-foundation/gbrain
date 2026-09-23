@@ -1,6 +1,7 @@
-> **This is a fork.** It carries one patch on top of upstream
-> [garrytan/gbrain](https://github.com/garrytan/gbrain): a native Amazon Bedrock
-> provider, so a deployment inside AWS needs no model-provider API key. See
+> **This is a fork** of upstream
+> [garrytan/gbrain](https://github.com/garrytan/gbrain). Its main patch is a
+> native Amazon Bedrock provider, so a deployment inside AWS needs no
+> model-provider API key. See
 > **[FORK.md](FORK.md)** for why it exists, the branch layout, and how to rebase.
 
 # GBrain
