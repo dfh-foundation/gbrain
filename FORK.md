@@ -21,7 +21,7 @@ the fork is permanent until told otherwise.
 
 ## Branch layout
 
-`feat/bedrock-provider` branches off the **`v0.48.5.0` tag**, not `master`.
+`feat/bedrock-provider` branches off the **`v0.51.8.0` tag**, not `master`.
 
 That is deliberate. The consumer pins an exact commit, so the deployed tree
 should be a released upstream tag plus this patch and nothing else — `master`
@@ -40,14 +40,14 @@ Nothing else references this fork.
 
 ```sh
 git fetch upstream --tags
-git rebase --onto v0.<new> v0.48.5.0 feat/bedrock-provider
+git rebase --onto v0.<new> v0.51.8.0 feat/bedrock-provider
 ```
 
 Then re-verify. All of these must pass before the tip is pinned:
 
 ```sh
 bun install
-bun run typecheck
+NODE_OPTIONS=--max-old-space-size=4096 bun run typecheck   # tsc outgrew node's 2 GB default by v0.51
 bun test test/ai/ test/github-source-page.test.ts
 bun run check:module-size
 bun run check:gateway-routed
@@ -56,24 +56,41 @@ bun run check:exports-count
 
 ### What tends to need attention on a rebase
 
-**The `@ai-sdk/amazon-bedrock` pin.** `^4.0.172` is the newest release built on
-`@ai-sdk/provider@3.x`, which is the generation gbrain's anthropic/openai/google
-providers are on. The 5.x line moved to `provider@4.x`. If upstream ever bumps
-its providers to the 4.x generation, this pin must move with them — mixing
-provider-spec majors in one process does not work. Check with:
+**The `@ai-sdk/amazon-bedrock` pin.** Exactly `4.0.172`, with the
+`@ai-sdk/provider-utils` entry in `overrides` lifted from upstream's `4.0.33` to
+`4.0.50` to match it. Two constraints meet here.
+
+1. The provider-spec major must match gbrain's anthropic/openai/google providers,
+   which are on `@ai-sdk/provider@3.x`. The Bedrock 5.x line moved to
+   `provider@4.x`; mixing majors in one process does not work.
+2. Upstream's override forces the hoisted `provider-utils`, which is the copy
+   Bedrock uses. A newer Bedrock such as `4.0.183` declares `provider-utils
+   4.0.54` and crashes at import on `4.0.33`, which defines `secureJsonParse`
+   without exporting it. The release built against `4.0.33`, `4.0.125`, reports
+   `maxEmbeddingsPerCall = 1` for every model family, where `4.0.172` batches 96
+   Cohere inputs per call, and our recipe relies on that batching.
+
+The override only reaches the hoisted copy: upstream's own providers keep nested
+`provider-utils` and `provider` of their own, so lifting it affects Bedrock and
+the `@ai-sdk/provider` type import in `claude-cli-language-model.ts`. The caret
+on the old `^4.0.172` pin is what let a lock regeneration float past the
+override. Check with:
 
 ```sh
-# @ai-sdk/provider is transitive, so `bun pm ls` does not show it — read the
-# resolved versions directly. The major must match across both.
-for p in provider amazon-bedrock anthropic; do
+# Both are transitive, so `bun pm ls` does not show them — read the resolved
+# versions directly. The provider major must match across all three.
+for p in provider provider-utils amazon-bedrock anthropic; do
   printf '%-16s %s\n' "$p" "$(jq -r .version "node_modules/@ai-sdk/$p/package.json")"
 done
 ```
 
-**The module-size ratchet.** `scripts/module-size-limits.tsv` carries a raised
-ceiling for `src/core/ai/gateway.ts` with the reason appended. Upstream edits
-that file too, so it conflicts often; keep both sides' entries and re-derive the
-number rather than taking either side wholesale.
+**The module-size ratchet.** `scripts/module-size-limits.tsv` carries raised
+ceilings for `src/cli.ts`, `src/core/ai/gateway.ts` and
+`src/core/github-source.ts`, each with a `fork:` note appended. Upstream edits
+all three, so take upstream's table on a conflict and re-derive each fork row as
+upstream's line count plus the fork's delta, measured after the rebase. Record
+fork growth in the commit that causes it; the v0.48.5.0 tip failed the check
+because two later commits never did.
 
 **`test/ai/gateway-chat.test.ts`.** The patch adds `bedrock` to the
 `ALWAYS_CACHES` set in the "recipes declaring supports_prompt_cache" invariant.
@@ -219,8 +236,9 @@ The field was already in the API response and dropped during parsing.
 **Large bot comments render as a stub.** A bot's issue comment over
 `BOT_COMMENT_MAX_BYTES` (1 KB) renders as `_(bot comment, 13 KB, omitted)_` under
 its usual heading. Shorter ones stay verbatim, and so do reviews and review
-comments, where AI reviewers post real findings. The logic lives in `src/core/github-bot-comments.ts`, so
-`github-source.ts` grows by one import against its module-size ceiling.
+comments, where AI reviewers post real findings. The logic lives in
+`src/core/github-bot-comments.ts`, so `github-source.ts` grows by one import
+against its module-size ceiling.
 
 Measured on the DFH host on 2026-09-23 before the change: bot comments were
 53.8 of 110.4 MB across 13,158 rendered pages, and 289 of the 362 pages over
