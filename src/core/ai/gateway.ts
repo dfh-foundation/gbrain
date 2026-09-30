@@ -3399,6 +3399,32 @@ export function toAISDKTools(tools: ChatToolDef[] | undefined): Record<string, a
   }, {} as Record<string, any>);
 }
 
+/**
+ * One breakpoint value, spelled for whichever provider is actually serving
+ * this call. Anthropic marks a block with `cacheControl`; Bedrock's Converse
+ * API takes a positional `cachePoint` block under its own provider key, so on
+ * Bedrock the Anthropic marker alone is a silent no-op — the request succeeds
+ * and simply never caches.
+ *
+ * The Bedrock key is added ONLY for the Bedrock recipe. Emitting both
+ * unconditionally would be inert under the AI SDK's provider-options contract,
+ * but it would break the invariant that a non-Anthropic route carries
+ * Anthropic-namespaced markers and nothing else — which the Gemini breakpoint
+ * test pins deliberately. Lives outside chat() because chat() sits at its
+ * function-size baseline.
+ */
+function chatCacheMarkers(
+  implementation: Recipe['implementation'],
+  cacheControlValue: { type: 'ephemeral'; ttl?: '5m' | '1h' },
+) {
+  return {
+    anthropic: { cacheControl: cacheControlValue },
+    ...(implementation === 'native-bedrock'
+      ? { bedrock: { cachePoint: { type: 'default' as const } } }
+      : {}),
+  };
+}
+
 export async function chat(opts: ChatOpts): Promise<ChatResult> {
   const tracker = __budgetStore.getStore() ?? null;
   const modelStrEarly = opts.model ?? getChatModel();
@@ -3541,26 +3567,6 @@ export async function chat(opts: ChatOpts): Promise<ChatResult> {
     ? (providerOptions.anthropic?.cacheControl ?? { type: 'ephemeral' })
     : undefined;
 
-  // One breakpoint value, spelled for whichever provider is actually serving
-  // this call. Anthropic marks a block with `cacheControl`; Bedrock's Converse
-  // API takes a positional `cachePoint` block under its own provider key, so on
-  // Bedrock the Anthropic marker alone is a silent no-op — the request succeeds
-  // and simply never caches.
-  //
-  // The Bedrock key is added ONLY for the Bedrock recipe. Emitting both
-  // unconditionally would be inert under the AI SDK's provider-options contract,
-  // but it would break the invariant that a non-Anthropic route carries
-  // Anthropic-namespaced markers and nothing else — which the Gemini breakpoint
-  // test pins deliberately.
-  const cacheMarkers = cacheControlValue
-    ? {
-        anthropic: { cacheControl: cacheControlValue },
-        ...(recipe.implementation === 'native-bedrock'
-          ? { bedrock: { cachePoint: { type: 'default' as const } } }
-          : {}),
-      }
-    : undefined;
-
   // Anthropic-only secondary breakpoint: mark the LAST tool def too (mirrors
   // subagent.ts's raw-SDK path — Anthropic caches everything up to and
   // including the last `cache_control` block it sees in the request, so
@@ -3570,7 +3576,7 @@ export async function chat(opts: ChatOpts): Promise<ChatResult> {
   if (cacheControlValue && opts.tools && opts.tools.length > 0 && tools) {
     const lastTool = tools[opts.tools[opts.tools.length - 1]!.name];
     if (lastTool) {
-      lastTool.providerOptions = cacheMarkers;
+      lastTool.providerOptions = chatCacheMarkers(recipe.implementation, cacheControlValue);
     }
   }
 
@@ -3595,7 +3601,7 @@ export async function chat(opts: ChatOpts): Promise<ChatResult> {
     ? {
         role: 'system' as const,
         content: opts.system,
-        providerOptions: cacheMarkers,
+        providerOptions: chatCacheMarkers(recipe.implementation, cacheControlValue),
       }
     : opts.system;
 
