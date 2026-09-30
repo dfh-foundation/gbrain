@@ -215,9 +215,13 @@ Set the variable to a sentence saying how to upgrade instead. Two effects:
    self-upgrade`. The `UPGRADE_AVAILABLE <cur> <latest>` machine marker is
    untouched, so the self-upgrade skill and MCP still see new versions — a
    managed install wants the signal, just not the command.
-2. `gbrain self-upgrade` refuses, prints the hint, and exits 1. Since v0.60 the
-   refusal lives in `src/cli/commands/self-upgrade.ts`, where upstream's command
-   table dispatches it; the notice is still in `src/cli.ts`. The override is
+2. `gbrain self-upgrade` and `gbrain upgrade` refuse, print the hint, and exit
+   1. `upgrade` matters as much: doctor, `check-update` and the upgrade skill all
+   suggest it, and autopilot's auto mode runs `upgrade --swap-only`. Both go
+   through `src/cli/managed-install.ts`, called from their dispatchers in
+   `src/cli/commands/`; the notice is still in `src/cli.ts`. Doctor's
+   upgrade-health check still prints `run: gbrain self-upgrade`, which the
+   refusal makes harmless. The override is
    unsetting the variable, not a flag: `--force` already means "apply even if
    not behind" in that command, and a new flag would have to be added to
    `cli-flag-registry.generated.ts`, whose pre-dispatch validator rejects

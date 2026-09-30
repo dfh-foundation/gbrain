@@ -4,7 +4,10 @@
  * src/cli.ts (refactor wave 1, W4 cli); the record lives in src/cli/command-table.ts.
  */
 
+import { refuseManagedInstall } from '../managed-install.ts';
+
 export async function run(args: string[]): Promise<void> {
+  if (refuseManagedInstall('upgrade')) return;
   const { runUpgrade } = await import('../../commands/upgrade.ts');
   await runUpgrade(args);
 }
