@@ -53,6 +53,7 @@ bun run check:module-size
 bun run check:function-size
 bun run check:gateway-routed
 bun run check:exports-count
+bun run verify                          # upstream's full check suite, as the fork's CI runs it
 ```
 
 ### What tends to need attention on a rebase
@@ -97,6 +98,11 @@ because two later commits never did.
 function over 300 lines at its size in `scripts/function-size-baseline.tsv`.
 `chat()` in `gateway.ts` sits at its baseline, so fork logic stays in helpers
 beside it, such as `chatCacheMarkers`, and not in its body.
+
+**No fork banner in `README.md`.** Upstream's README sits at exactly the
+45,000-byte cap that `check:doc-history` enforces, so any banner fails `bun run
+verify`. The fork is announced by this file and the repository description
+instead. If a rebase conflicts in `README.md`, take upstream's.
 
 **`test/ai/gateway-chat.test.ts`.** The patch adds `bedrock` to the
 `ALWAYS_CACHES` set in the "recipes declaring supports_prompt_cache" invariant.

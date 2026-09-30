@@ -209,8 +209,7 @@ export function dimsProviderOptions(
       // defaults an unset inputType to `search_query`. Omitting this case would
       // therefore embed every INDEXED document as a query — corrupting the whole
       // index rather than degrading one lookup, and silently, since the request
-      // succeeds either way. Default to the document side, as the ZeroEntropy
-      // case above does.
+      // succeeds either way. Default to the document side.
       if (matchId.includes('cohere.embed-')) {
         if (!COHERE_BEDROCK_VALID_DIMS.includes(dims)) {
           throw new AIConfigError(
