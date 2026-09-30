@@ -27,6 +27,7 @@ import { gbrainPath } from './config.ts';
 import type { GBrainConfig } from './config.ts';
 import { promptLineStderr } from './cli-util.ts';
 import type { CliOptions } from './cli-options.ts';
+import { managedInstallHint } from './managed-install.ts';
 
 // Structural shape of the banner identity payload. Defined here (not imported
 // from src/cli.ts) to avoid a circular import; cli.ts's BrainIdentity is
@@ -381,7 +382,7 @@ export async function maybePromptForUpgrade(
     bannerIsSuppressed,
   });
 
-  if (decision.kind === 'noop') return;
+  if (decision.kind === 'noop' || managedInstallHint()) return;
 
   // Acquire lock. EEXIST → sibling owns the prompt, no-op silently.
   const lock = acquirePromptLock();

@@ -39,6 +39,7 @@ import {
   reconcileBreadcrumb,
   resolveSelfUpgradeMode,
 } from '../core/self-upgrade.ts';
+import { managedInstallHint } from '../core/managed-install.ts';
 import { logSelfUpgrade } from '../core/audit/self-upgrade-audit.ts';
 import { detectInstallMethod } from './upgrade.ts';
 import { evaluateQuietHours } from '../core/minions/quiet-hours.ts';
@@ -427,7 +428,7 @@ export async function attemptAutopilotSelfUpgrade(
       failedVersions: cfg.self_upgrade?.failed_versions ?? [],
       idle,
       inQuietHours: verdict !== 'allow',
-      canSelfUpdate: canSelfUpdate(installMethod),
+      canSelfUpdate: !managedInstallHint() && canSelfUpdate(installMethod),
       throttledByInterval: false, // cache TTL is the fetch throttle
     });
 

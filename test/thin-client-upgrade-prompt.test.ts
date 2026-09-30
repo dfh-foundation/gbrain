@@ -508,6 +508,24 @@ describe('maybePromptForUpgrade orchestrator', () => {
     });
   });
 
+  test('managed install (fork) → never prompts or upgrades', async () => {
+    await withEnv({ GBRAIN_HOME: tmpHome, GBRAIN_MANAGED_INSTALL_HINT: 'Pinned by the host config.' }, async () => {
+      let prompted = false;
+      let upgradeRan = false;
+      _setPromptReaderForTest(async () => { prompted = true; return 'y'; });
+      _setUpgradeRunnerForTest(() => { upgradeRan = true; });
+      await maybePromptForUpgrade(cfg, identity, DEFAULT_CLI_OPTS, false, {
+        localVersion: '0.31.4',
+        exit: ((code: number) => { throw new Error(`unexpected exit ${code}`); }) as (code: number) => never,
+        log: () => { /* swallow */ },
+        stdinIsTty: true,
+        stdoutIsTty: true,
+      });
+      expect(prompted).toBe(false);
+      expect(upgradeRan).toBe(false);
+    });
+  });
+
   test('prompt → "y" → upgrade runs → advanced → state=yes, exit 0', async () => {
     await withEnv({ GBRAIN_HOME: tmpHome }, async () => {
       _setPromptReaderForTest(async () => 'y');

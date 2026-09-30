@@ -5,7 +5,7 @@
  *
  * The version notice stops an upgrade being SUGGESTED; only this stops someone
  * who runs one from memory, from an older shell history, from a doctor or skill
- * hint, or from autopilot's `upgrade --swap-only`.
+ * hint.
  *
  * The escape hatch is unsetting the variable, NOT a flag. `--force` already
  * means "apply even if not behind" in self-upgrade, so reusing it would give one
@@ -16,11 +16,21 @@
  * carrying that on every rebase.
  */
 
-import { setCliExitVerdict } from '../core/cli-force-exit.ts';
+import { setCliExitVerdict } from './cli-force-exit.ts';
+
+/**
+ * The hint when an external manager owns the install, else null. Also read by
+ * the two paths that start an upgrade without a person typing the command:
+ * autopilot's auto mode treats it as an install it cannot update, and the
+ * thin-client prompt stays silent (the version notice already prints the hint).
+ */
+export function managedInstallHint(): string | null {
+  return process.env.GBRAIN_MANAGED_INSTALL_HINT?.trim() || null;
+}
 
 /** True when the command was refused; the caller must return without running it. */
 export function refuseManagedInstall(command: string): boolean {
-  const hint = process.env.GBRAIN_MANAGED_INSTALL_HINT?.trim();
+  const hint = managedInstallHint();
   if (!hint) return false;
   process.stderr.write(
     `gbrain ${command}: this install is managed externally.\n${hint}\n` +

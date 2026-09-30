@@ -87,9 +87,10 @@ done
 ```
 
 **The module-size ratchet.** `scripts/module-size-limits.tsv` carries raised
-ceilings for `src/cli.ts`, `src/core/ai/gateway.ts` and
-`src/core/github-source.ts`, each with a `fork:` note appended. Upstream edits
-all three, so take upstream's table on a conflict and re-derive each fork row as
+ceilings for `src/cli.ts`, `src/core/ai/gateway.ts`,
+`src/core/github-source.ts` and `src/commands/autopilot.ts`, each with a `fork:`
+note appended. Upstream edits
+all four, so take upstream's table on a conflict and re-derive each fork row as
 upstream's line count plus the fork's delta, measured after the rebase. Record
 fork growth in the commit that causes it; the v0.48.5.0 tip failed the check
 because two later commits never did.
@@ -223,9 +224,12 @@ Set the variable to a sentence saying how to upgrade instead. Two effects:
    managed install wants the signal, just not the command.
 2. `gbrain self-upgrade` and `gbrain upgrade` refuse, print the hint, and exit
    1. `upgrade` matters as much: doctor, `check-update` and the upgrade skill all
-   suggest it, and autopilot's auto mode runs `upgrade --swap-only`. Both go
-   through `src/cli/managed-install.ts`, called from their dispatchers in
-   `src/cli/commands/`; the notice is still in `src/cli.ts`. Doctor's
+   suggest it. Both go through `src/core/managed-install.ts`, called from their
+   dispatchers in `src/cli/commands/`; the notice is still in `src/cli.ts`. The
+   same hint makes autopilot's auto mode skip the release as an install it
+   cannot update, rather than run `upgrade --swap-only` and record the refusal
+   as a failed version. It also silences the thin-client upgrade prompt, which
+   would otherwise run `gbrain upgrade` on Enter and exit 1 on the refusal. Doctor's
    upgrade-health check still prints `run: gbrain self-upgrade`, which the
    refusal makes harmless. The override is
    unsetting the variable, not a flag: `--force` already means "apply even if
