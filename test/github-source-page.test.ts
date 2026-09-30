@@ -270,6 +270,60 @@ describe('renderItemPage bot comments', () => {
     expect(page).toContain(exact);
   });
 
+  describe('repeated bot comments', () => {
+    const status = '#### Tofu Validate 📖`success`\n\n*Pusher: @promoter[bot], Action: `pull_request`*';
+    const failure = status.replace('success', 'failure');
+    const ci = (body: string, minute: number) => ({
+      user: { login: 'github-actions[bot]', type: 'Bot' },
+      body,
+      created_at: `2026-08-05T05:${String(minute).padStart(2, '0')}:00Z`,
+    });
+
+    test('a consecutive run renders once with a count and the last timestamp', () => {
+      const comments = Array.from({ length: 50 }, (_, i) => ci(status, i));
+      const page = renderItemPage(baseItemData({ comments }));
+      expect(page.split('Tofu Validate').length - 1).toBe(1);
+      expect(page).toContain('### github-actions[bot] · 2026-08-05T05:00:00Z');
+      expect(page).toContain('_(posted 49 more times, the last at 2026-08-05T05:49:00Z)_');
+    });
+
+    test('a single repeat reads as one more time', () => {
+      const page = renderItemPage(baseItemData({ comments: [ci(status, 0), ci(status, 1)] }));
+      expect(page).toContain('_(posted 1 more time, the last at 2026-08-05T05:01:00Z)_');
+    });
+
+    test('a different comment breaks the run and keeps the order', () => {
+      const page = renderItemPage(
+        baseItemData({ comments: [ci(status, 0), ci(status, 1), ci(failure, 2), ci(status, 3)] }),
+      );
+      expect(page.split('Tofu Validate').length - 1).toBe(3);
+      expect(page.indexOf('`failure`')).toBeGreaterThan(page.indexOf('posted 1 more time'));
+      expect(page.lastIndexOf('`success`')).toBeGreaterThan(page.indexOf('`failure`'));
+    });
+
+    test('a human comment between two identical bot comments breaks the run', () => {
+      const human = { user: { login: 'bob' }, body: 'rerunning', created_at: '2026-08-05T05:01:30Z' };
+      const page = renderItemPage(baseItemData({ comments: [ci(status, 0), human, ci(status, 2)] }));
+      expect(page.split('Tofu Validate').length - 1).toBe(2);
+      expect(page).not.toContain('more time');
+    });
+
+    test('identical human comments and identical bodies from different bots stay separate', () => {
+      const bob = (m: number) => ({ user: { login: 'bob' }, body: '+1', created_at: `2026-08-05T05:0${m}:00Z` });
+      const other = { ...ci(status, 3), user: { login: 'other[bot]' } };
+      const page = renderItemPage(baseItemData({ comments: [bob(0), bob(1), ci(status, 2), other] }));
+      expect(page.split('### bob').length - 1).toBe(2);
+      expect(page.split('Tofu Validate').length - 1).toBe(2);
+      expect(page).not.toContain('more time');
+    });
+
+    test('a run of large bot comments collapses to one stub', () => {
+      const page = renderItemPage(baseItemData({ comments: [ci(log, 0), ci(log, 1), ci(log, 2)] }));
+      expect(page.split('_(bot comment, 14 KB, omitted)_').length - 1).toBe(1);
+      expect(page).toContain('_(posted 2 more times, the last at 2026-08-05T05:02:00Z)_');
+    });
+  });
+
   test('bot reviews and review comments stay verbatim', () => {
     const page = renderItemPage(
       baseItemData({

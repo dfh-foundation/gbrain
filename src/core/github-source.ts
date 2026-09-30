@@ -43,7 +43,7 @@ import { dirname, join, relative } from 'node:path';
 import type { BrainEngine } from './engine.ts';
 import type { SyncOpts } from '../commands/sync.ts';
 import { isWriteTargetContained } from './path-confine.ts';
-import { botCommentStub, type GitHubUser } from './github-bot-comments.ts';
+import { botCommentStub, collapseRepeatedBotComments, repeatedBotCommentNote, type GitHubUser } from './github-bot-comments.ts';
 import { createProgress, startHeartbeat } from './progress.ts';
 import { getCliOptions, cliOptsToProgressOptions } from './cli-options.ts';
 
@@ -905,9 +905,11 @@ export function renderItemPage(data: GitHubItemData, detailFetched = true, synce
 
   if (data.comments.length > 0) {
     body.push('## Comments', '');
-    for (const c of data.comments) {
+    for (const { comment: c, repeats, lastAt } of collapseRepeatedBotComments(data.comments)) {
       body.push(`### ${c.user?.login ?? 'ghost'} · ${c.created_at}`, '');
       body.push(botCommentStub(c.user, c.body) ?? linkifyMentions(c.body, data.repo), '');
+      const note = repeatedBotCommentNote(repeats, lastAt);
+      if (note) body.push(note, '');
     }
   }
 

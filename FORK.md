@@ -234,7 +234,7 @@ both. This stops the mistake; that one recovers from it.
 
 ## GitHub pull request pages
 
-Two changes to how the `github` source renders an item page, neither
+Three changes to how the `github` source renders an item page, none of them
 DFH-specific.
 
 **`base_ref` in PR frontmatter.** `merged: true` alone means merged somewhere, so
@@ -245,8 +245,17 @@ The field was already in the API response and dropped during parsing.
 `BOT_COMMENT_MAX_BYTES` (1 KB) renders as `_(bot comment, 13 KB, omitted)_` under
 its usual heading. Shorter ones stay verbatim, and so do reviews and review
 comments, where AI reviewers post real findings. The logic lives in
-`src/core/github-bot-comments.ts`, so `github-source.ts` grows by one import
+`src/core/github-bot-comments.ts`, so `github-source.ts` grows only by the calls
 against its module-size ceiling.
+
+**Repeated bot comments render once.** A run of consecutive, byte-identical
+comments from one bot renders as its first comment followed by
+`_(posted N more times, the last at <timestamp>)_`. The size stub judges each
+comment alone, so it missed a CI bot that posts the same 166-byte status on
+every push: one promotion PR carried 2,253 copies, 511 KB of its page, and sat
+past the embed-skip limit on those alone. Collapsed, the section is 289 bytes.
+Only consecutive repeats collapse, so a failure between successes or a human
+reply breaks the run and the page keeps its order.
 
 Measured on the DFH host on 2026-09-23 before the change: bot comments were
 53.8 of 110.4 MB across 13,158 rendered pages, and 289 of the 362 pages over
