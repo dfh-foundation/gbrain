@@ -21,7 +21,7 @@ the fork is permanent until told otherwise.
 
 ## Branch layout
 
-`feat/bedrock-provider` branches off the **`v0.51.8.0` tag**, not `master`.
+`feat/bedrock-provider` branches off the **`v0.60.17.0` tag**, not `master`.
 
 That is deliberate. The consumer pins an exact commit, so the deployed tree
 should be a released upstream tag plus this patch and nothing else — `master`
@@ -40,7 +40,7 @@ Nothing else references this fork.
 
 ```sh
 git fetch upstream --tags
-git rebase --onto v0.<new> v0.51.8.0 feat/bedrock-provider
+git rebase --onto v0.<new> v0.60.17.0 feat/bedrock-provider
 ```
 
 Then re-verify. All of these must pass before the tip is pinned:
@@ -50,6 +50,7 @@ bun install
 NODE_OPTIONS=--max-old-space-size=4096 bun run typecheck   # tsc outgrew node's 2 GB default by v0.51
 bun test test/ai/ test/github-source-page.test.ts
 bun run check:module-size
+bun run check:function-size
 bun run check:gateway-routed
 bun run check:exports-count
 ```
@@ -91,6 +92,11 @@ all three, so take upstream's table on a conflict and re-derive each fork row as
 upstream's line count plus the fork's delta, measured after the rebase. Record
 fork growth in the commit that causes it; the v0.48.5.0 tip failed the check
 because two later commits never did.
+
+**The function-size ratchet.** Since v0.60, `check:function-size` caps every
+function over 300 lines at its size in `scripts/function-size-baseline.tsv`.
+`chat()` in `gateway.ts` sits at its baseline, so fork logic stays in helpers
+beside it, such as `chatCacheMarkers`, and not in its body.
 
 **`test/ai/gateway-chat.test.ts`.** The patch adds `bedrock` to the
 `ALWAYS_CACHES` set in the "recipes declaring supports_prompt_cache" invariant.
@@ -209,7 +215,9 @@ Set the variable to a sentence saying how to upgrade instead. Two effects:
    self-upgrade`. The `UPGRADE_AVAILABLE <cur> <latest>` machine marker is
    untouched, so the self-upgrade skill and MCP still see new versions — a
    managed install wants the signal, just not the command.
-2. `gbrain self-upgrade` refuses, prints the hint, and exits 1. The override is
+2. `gbrain self-upgrade` refuses, prints the hint, and exits 1. Since v0.60 the
+   refusal lives in `src/cli/commands/self-upgrade.ts`, where upstream's command
+   table dispatches it; the notice is still in `src/cli.ts`. The override is
    unsetting the variable, not a flag: `--force` already means "apply even if
    not behind" in that command, and a new flag would have to be added to
    `cli-flag-registry.generated.ts`, whose pre-dispatch validator rejects
