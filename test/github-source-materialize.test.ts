@@ -813,4 +813,77 @@ describe('github-source materialize', () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  test('an excluded repo is never swept under either scope', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ghsrc-exclude-'));
+    const fx = makeFixture();
+    const fetchImpl = buildFetch(fx);
+    try {
+      await insertSource(engine, dir);
+      await withEnv({ GH_TOKEN: 'test-token' }, async () => {
+        for (const scope of ['repos', 'auto'] as const) {
+          await runGitHubSync(
+            engine,
+            'ghsrc',
+            { ...makeCfg(dir), scope, exclude: ['Acme/App'] },
+            { sourceId: 'ghsrc', full: true, noExtract: true, noEmbed: true },
+            fetchImpl,
+          );
+        }
+        expect(fx.calls.some((p) => p.startsWith(`/repos/${REPO}`))).toBe(false);
+        expect(await pageSlugs(engine)).toEqual([]);
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('a full sweep prunes an excluded repo; an incremental one leaves it', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ghsrc-exclude-prune-'));
+    const fx = makeFixture();
+    const fetchImpl = buildFetch(fx);
+    const opts = { sourceId: 'ghsrc', noExtract: true, noEmbed: true };
+    try {
+      await insertSource(engine, dir);
+      await withEnv({ GH_TOKEN: 'test-token' }, async () => {
+        await runGitHubSync(engine, 'ghsrc', makeCfg(dir), { ...opts, full: true }, fetchImpl);
+        const before = await pageSlugs(engine);
+        expect(before).toContain('gh/acme/app/1');
+
+        const excluded = { ...makeCfg(dir), exclude: [REPO] };
+        await runGitHubSync(engine, 'ghsrc', excluded, opts, fetchImpl);
+        expect(await pageSlugs(engine)).toEqual(before);
+
+        const res = await runGitHubSync(engine, 'ghsrc', excluded, { ...opts, full: true }, fetchImpl);
+        expect(res.deleted).toBe(before.length);
+        expect(await pageSlugs(engine)).toEqual([]);
+        expect(existsSync(join(dir, 'gh', REPO, '1.md'))).toBe(false);
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('a webhook refresh for an excluded repo materializes nothing', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ghsrc-exclude-webhook-'));
+    const fx = makeFixture();
+    const fetchImpl = buildFetch(fx);
+    try {
+      await insertSource(engine, dir);
+      await withEnv({ GH_TOKEN: 'test-token' }, async () => {
+        const res = await runGitHubSync(
+          engine,
+          'ghsrc',
+          { ...makeCfg(dir), scope: 'auto', repos: [], exclude: [REPO] },
+          { sourceId: 'ghsrc', githubItem: { repo: 'Acme/App', number: 1, kind: 'issue' } },
+          fetchImpl,
+        );
+        expect(res.status).toBe('up_to_date');
+        expect(existsSync(join(dir, 'gh', REPO, '1.md'))).toBe(false);
+        expect(await pageSlugs(engine)).toEqual([]);
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

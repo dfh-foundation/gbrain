@@ -39,16 +39,16 @@ export function parseGitHubSourceConfig(
   const scope = config.gh_scope === 'repos' ? 'repos' : 'auto';
   // Repo names are case-insensitive on GitHub; everything downstream (page
   // paths, state file, webhook matching, slugs) keys on the lowercase form.
-  const repos =
-    typeof config.gh_repos === 'string'
-      ? config.gh_repos
-          .split(',')
-          .map((s) => s.trim().toLowerCase())
-          .filter(isValidRepoName)
-      : [];
+  const repos = parseRepoList(config.gh_repos);
+  const exclude = parseRepoList(config.gh_exclude);
   const dir =
     typeof config.gh_dir === 'string' && config.gh_dir.length > 0
       ? config.gh_dir
       : fallbackDir;
-  return { tokenEnv, app, scope, repos, dir };
+  return { tokenEnv, app, scope, repos, exclude, dir };
+}
+
+export function parseRepoList(value: unknown): string[] {
+  if (typeof value !== 'string') return [];
+  return value.split(',').map((s) => s.trim().toLowerCase()).filter(isValidRepoName);
 }

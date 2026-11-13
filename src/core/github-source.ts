@@ -67,6 +67,8 @@ export interface GitHubSourceConfig {
   scope: 'auto' | 'repos';
   /** owner/name list (lowercase), only when scope === 'repos'. */
   repos: string[];
+  /** owner/name list (lowercase) never synced under either scope; a full sweep prunes their pages. */
+  exclude?: string[];
   /** Managed dir where pages are materialized. */
   dir: string;
 }
@@ -434,8 +436,9 @@ export async function resolveScopeRepos(
   client: GitHubClient,
   signal?: AbortSignal,
 ): Promise<string[]> {
+  const excluded = new Set((cfg.exclude ?? []).map((r) => r.toLowerCase()));
   if (cfg.scope === 'repos') {
-    return [...new Set(cfg.repos.map((r) => r.toLowerCase()))];
+    return [...new Set(cfg.repos.map((r) => r.toLowerCase()))].filter((r) => !excluded.has(r));
   }
   // Installation tokens cannot call /user/repos, so the app path resolves
   // through /installation/repositories (object-shaped: { repositories }).
@@ -452,7 +455,7 @@ export async function resolveScopeRepos(
           { signal },
         )
       ).map((r) => r.full_name.toLowerCase());
-  return [...new Set(names)].sort();
+  return [...new Set(names)].filter((r) => !excluded.has(r)).sort();
 }
 
 // ── Item enumeration ─────────────────────────────────────────────────────────
@@ -1091,6 +1094,7 @@ async function deleteStalePages(
   keepPaths: Set<string>,
   summary: GitHubSyncSummary,
   succeededRepos: ReadonlySet<string>,
+  excludedRepos: ReadonlySet<string>,
 ): Promise<void> {
   const { planReconcileDeletes } = await import('../commands/sync.ts');
   const allRows = await deps.engine.executeRaw<{ slug: string; source_path: string | null }>(
@@ -1099,14 +1103,16 @@ async function deleteStalePages(
   );
   // Data-loss guard: a repo that errored mid-sweep contributes no keepPaths,
   // so its pages must be EXCLUDED from the reconcile entirely, otherwise a
-  // transient API failure would look like a bulk deletion.
+  // transient API failure would look like a bulk deletion. An excluded repo
+  // also contributes no keepPaths, which is what prunes its pages.
   const rows = allRows.filter((r) => {
     if (r.source_path === null) return false;
     const parts = r.source_path.split('/');
     const ownerRepo = parts.length >= 3 ? parts.slice(0, 3).join('/') : '';
     // Case-folded: legacy rows may carry canonical-case source_paths while
     // succeededRepos keys on the lowercase form.
-    return ownerRepo !== '' && succeededRepos.has(ownerRepo.toLowerCase());
+    const key = ownerRepo.toLowerCase();
+    return ownerRepo !== '' && (succeededRepos.has(key) || excludedRepos.has(key));
   });
   const plan = planReconcileDeletes(
     rows,
@@ -1393,7 +1399,8 @@ async function runGitHubSyncInner(engine: BrainEngine, sourceId: string, cfg: Gi
     summary.pagesAffected = [...new Set(summary.pagesAffected)];
 
     if (opts.full) {
-      await deleteStalePages(deps, keepPaths, summary, succeededRepos);
+      const excludedRepos = new Set((cfg.exclude ?? []).map((r) => `gh/${r.toLowerCase()}`));
+      await deleteStalePages(deps, keepPaths, summary, succeededRepos, excludedRepos);
     }
 
     // Size-gated extract + embed, mirroring performSyncInner's gates.

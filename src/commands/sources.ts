@@ -1880,6 +1880,7 @@ export async function runSources(engine: BrainEngine, args: string[]): Promise<v
     case 'set-cr-mode': return runSetCrMode(engine, rest);
     // #4739 non-destructive local_path pointer repair
     case 'set-path':   { const { runSetPath } = await import('./sources-set-path.ts'); return runSetPath(engine, rest); }
+    case 'set-gh-exclude': { const { runSetGhExclude } = await import('./sources-set-gh-exclude.ts'); return runSetGhExclude(engine, rest); }
     case 'audit':      return runAudit(engine, rest);
     // v0.46 github-source demo (offline, privacy-clean fixtures)
     case 'demo':       { const { runSourcesDemo } = await import('./sources-demo.ts'); return runSourcesDemo(engine, rest); }
@@ -1956,6 +1957,9 @@ Subcommands:
                                     Rejects a missing source or a path that
                                     doesn't exist. See gbrain doctor's
                                     default_source_local_path check.
+  set-gh-exclude <id> <owner/name,...|none>
+                                    Repos a github source never syncs; the next
+                                    full sweep prunes their pages.
   webhook <set|show|rotate|clear> <id> [options]
                                     v0.40 — per-source webhook secret management.
                                     Run 'sources webhook --help' for subcommand detail.
