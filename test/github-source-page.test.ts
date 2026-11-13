@@ -64,6 +64,7 @@ describe('parseGitHubSourceConfig', () => {
     expect(cfg.tokenEnv).toBe('GH_TOKEN');
     expect(cfg.scope).toBe('auto');
     expect(cfg.repos).toEqual([]);
+    expect(cfg.exclude).toEqual([]);
     expect(cfg.dir).toBe('/tmp/fallback');
   });
 
@@ -92,6 +93,15 @@ describe('parseGitHubSourceConfig', () => {
       '/tmp/fallback',
     );
     expect(cfg.repos).toEqual(['acme/app']);
+  });
+
+  test('reads gh_exclude like gh_repos, under either scope', () => {
+    const cfg = parseGitHubSourceConfig(
+      { kind: 'github', gh_scope: 'auto', gh_exclude: ' Acme/Secret ,not-a-repo,acme/plans' },
+      '/tmp/fallback',
+    );
+    expect(cfg.scope).toBe('auto');
+    expect(cfg.exclude).toEqual(['acme/secret', 'acme/plans']);
   });
 
   test('isGitHubSourceConfig detects the kind', () => {

@@ -3,9 +3,10 @@
 Upstream is [garrytan/gbrain](https://github.com/garrytan/gbrain). This fork's
 main patch is a native Amazon Bedrock provider, in two halves that are easy to
 separate by accident — the recipe, and its rows in the canonical pricing table.
-Two smaller deltas follow it: the
-[managed-install hint](#managed-install-hint) and
-[GitHub pull request pages](#github-pull-request-pages).
+Smaller deltas follow it: the
+[managed-install hint](#managed-install-hint),
+[GitHub pull request pages](#github-pull-request-pages), and the
+[GitHub repo exclude list](#github-repo-exclude-list).
 
 Designs for Health runs gbrain on an EC2 host inside AWS. Every provider gbrain
 ships needs an API key; Bedrock signs with SigV4, so the host authenticates from
@@ -48,7 +49,8 @@ Then re-verify. All of these must pass before the tip is pinned:
 ```sh
 bun install
 bun run typecheck
-bun test test/ai/ test/github-source-page.test.ts
+bun test test/ai/ test/github-source-page.test.ts test/github-source-materialize.test.ts \
+  test/sources-set-gh-exclude.test.ts
 bun run check:module-size
 bun run check:gateway-routed
 bun run check:exports-count
@@ -234,3 +236,29 @@ chunks and hid the human discussion along with the deploy logs.
 The change applies to a page when its item is next fetched. Pages already on
 disk keep their bot content until a webhook delivery or a sweep re-renders
 them.
+
+## GitHub repo exclude list
+
+The `github` source can sync every repo the app can see (`--scope auto`) or an
+explicit list, and nothing in between. With the app installed on every repo in
+the org, the only way to keep one confidential repo out was an explicit list of
+all the others, which then misses every repo created afterwards.
+
+`gh_exclude` is a comma-separated `owner/name` list applied after either scope
+resolves, in `resolveScopeRepos`. That one filter covers sweeps and webhook
+single-item refreshes. A full sweep also prunes pages already indexed for an
+excluded repo, since it contributes no keep paths. Upstream only prunes repos
+that swept successfully, so a repo that merely drops out of scope keeps its
+pages forever.
+
+`sources add` writes a source's config once, so the list is set with a new verb,
+`gbrain sources set-gh-exclude <id> <list|none>`, in
+`src/commands/sources-set-gh-exclude.ts`. A deployment re-runs it on every
+boot. `sources.ts` grows by its dispatch and help rows, and `github-source.ts`
+by seven lines; both ceilings are raised in the same commit.
+
+`serve-http.ts` is unchanged. Its pre-enqueue `githubKindCoversRepo` check does
+not read the list, so a delivery for an excluded repo still queues a sync job
+that the scope guard then turns into a no-op.
+
+This one is generic enough to offer upstream.

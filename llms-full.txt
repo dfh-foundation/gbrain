@@ -4792,6 +4792,21 @@ Options:
 | `--repos a/b,c/d` | repos when `--scope repos` | none |
 | `--dir <path>` | managed page directory | `$GBRAIN_HOME/clones/<id>-github` |
 
+To keep a repo out under either scope, for example one confidential repo in
+an org whose GitHub App is installed on every repo, set an exclude list on the
+source:
+
+```bash
+gbrain sources set-gh-exclude gh owner/secret,owner/plans
+gbrain sources set-gh-exclude gh none   # clear it
+```
+
+An excluded repo is never swept, and a webhook delivery for it is acknowledged
+but never materialized. Pages it already has are pruned by the next
+`sync --full`, subject to the usual mass-delete guard; a delta sweep leaves
+them alone. The command rejects a malformed name rather than dropping it, and
+is safe to re-run on every boot.
+
 Repo names are matched case-insensitively everywhere (GitHub treats them
 that way); pages and state always use the lowercase form. The `gh_handle`
 and `gh_involvement` config keys are reserved: tolerated when present,
