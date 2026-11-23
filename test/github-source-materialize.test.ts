@@ -28,6 +28,7 @@ beforeEach(async () => {
 
 interface FixtureItem {
   number: number;
+  title?: string;
   kind: 'issue' | 'pr';
   state: 'open' | 'closed';
   updated_at: string;
@@ -114,7 +115,7 @@ function buildFetch(fx: { items: Map<number, FixtureItem>; calls: string[]; fail
         .filter((it) => !since || it.updated_at > since)
         .map((it) => ({
           number: it.number,
-          title: `Item ${it.number}`,
+          title: it.title ?? `Item ${it.number}`,
           state: it.state,
           updated_at: it.updated_at,
           ...(it.kind === 'pr' ? { pull_request: { url: `https://api.github.com/repos/${REPO}/pulls/${it.number}` } } : {}),
@@ -125,7 +126,7 @@ function buildFetch(fx: { items: Map<number, FixtureItem>; calls: string[]; fail
       return json(
         [...items.values()]
           .filter((it) => it.kind === 'pr' && it.state === 'open')
-          .map((it) => ({ number: it.number, title: `Item ${it.number}`, state: it.state, updated_at: it.updated_at, head: it.head })),
+          .map((it) => ({ number: it.number, title: it.title ?? `Item ${it.number}`, state: it.state, updated_at: it.updated_at, head: it.head })),
       );
     }
     const issueMatch = path.match(/^\/repos\/acme\/app\/issues\/(\d+)$/);
@@ -142,7 +143,7 @@ function buildFetch(fx: { items: Map<number, FixtureItem>; calls: string[]; fail
       if (fx.failDetailItems.has(it.number)) return json({ message: 'gone' }, 404);
       return json({
         number: it.number,
-        title: `Item ${it.number}`,
+        title: it.title ?? `Item ${it.number}`,
         state: it.state,
         state_reason: null,
         body: it.body,
@@ -166,7 +167,7 @@ function buildFetch(fx: { items: Map<number, FixtureItem>; calls: string[]; fail
       if (!it) return json({ message: 'not found' }, 404);
       return json({
         number: it.number,
-        title: `Item ${it.number}`,
+        title: it.title ?? `Item ${it.number}`,
         state: it.state,
         body: it.body,
         created_at: '2026-07-01T00:00:00Z',
@@ -877,6 +878,77 @@ describe('github-source materialize', () => {
         );
         expect(res.status).toBe('up_to_date');
         expect(existsSync(join(dir, 'gh', REPO, '1.md'))).toBe(false);
+        expect(await pageSlugs(engine)).toEqual([]);
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('a title-excluded item is never fetched past its list entry', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ghsrc-title-'));
+    const fx = makeFixture();
+    fx.items.get(2)!.title = 'Attorney\u00a0Client Privileged: fix';
+    const fetchImpl = buildFetch(fx);
+    try {
+      await insertSource(engine, dir);
+      await withEnv({ GH_TOKEN: 'test-token' }, async () => {
+        await runGitHubSync(
+          engine,
+          'ghsrc',
+          { ...makeCfg(dir), excludeTitles: 'attorney.{0,3}client.{0,3}privilege' },
+          { sourceId: 'ghsrc', full: true, noExtract: true, noEmbed: true },
+          fetchImpl,
+        );
+        const slugs = await pageSlugs(engine);
+        expect(slugs).toContain('gh/acme/app/1');
+        expect(slugs).not.toContain('gh/acme/app/2');
+        expect(fx.calls.some((p) => /\/(pulls|issues)\/2(\/|\?|$)/.test(p))).toBe(false);
+        expect(existsSync(join(dir, 'gh', REPO, '2.md'))).toBe(false);
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('marking an indexed item drops its page on the next sweep and on a webhook', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ghsrc-title-drop-'));
+    const fx = makeFixture();
+    const fetchImpl = buildFetch(fx);
+    const cfg = { ...makeCfg(dir), excludeTitles: 'privileged' };
+    const opts = { sourceId: 'ghsrc', noExtract: true, noEmbed: true };
+    try {
+      await insertSource(engine, dir);
+      await withEnv({ GH_TOKEN: 'test-token' }, async () => {
+        await runGitHubSync(engine, 'ghsrc', cfg, { ...opts, full: true }, fetchImpl);
+        expect(await pageSlugs(engine)).toContain('gh/acme/app/1');
+        expect(await pageSlugs(engine)).toContain('gh/acme/app/3');
+
+        fx.items.get(1)!.title = 'PRIVILEGED item';
+        fx.items.get(1)!.updated_at = '2026-08-09T00:00:00Z';
+        const res = await runGitHubSync(engine, 'ghsrc', cfg, opts, fetchImpl);
+        expect(res.deleted).toBe(1);
+        expect(await pageSlugs(engine)).not.toContain('gh/acme/app/1');
+        expect(existsSync(join(dir, 'gh', REPO, '1.md'))).toBe(false);
+
+        fx.items.get(3)!.title = 'privileged too';
+        await runGitHubSync(engine, 'ghsrc', cfg, { ...opts, githubItem: { repo: REPO, number: 3, kind: 'pr' } }, fetchImpl);
+        expect(await pageSlugs(engine)).not.toContain('gh/acme/app/3');
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('an invalid title pattern fails the sync instead of indexing', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ghsrc-title-bad-'));
+    const fx = makeFixture();
+    try {
+      await insertSource(engine, dir);
+      await withEnv({ GH_TOKEN: 'test-token' }, async () => {
+        await expect(
+          runGitHubSync(engine, 'ghsrc', { ...makeCfg(dir), excludeTitles: '(' }, { sourceId: 'ghsrc', full: true }, buildFetch(fx)),
+        ).rejects.toThrow(/gh_exclude_titles/);
         expect(await pageSlugs(engine)).toEqual([]);
       });
     } finally {

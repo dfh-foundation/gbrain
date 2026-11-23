@@ -62,6 +62,20 @@ but never materialized. Pages it already has are pruned by the next
 them alone. The command rejects a malformed name rather than dropping it, and
 is safe to re-run on every boot.
 
+To keep individual issues and pull requests out, for example ones whose title
+marks them as legally privileged, set a case-insensitive title pattern:
+
+```bash
+gbrain sources set-gh-exclude-titles gh 'attorne?y.{0,3}client.{0,3}privilege'
+gbrain sources set-gh-exclude-titles gh none   # clear it
+```
+
+A matching item is skipped before its detail is fetched. When an indexed item
+starts matching, the delta sweep or webhook that sees the new title
+soft-deletes its page and removes its file, so it leaves search at once and is
+hard-deleted by the next purge. Logs name the item by `repo#number` only. An
+invalid pattern is rejected when set and fails the sync if it reaches one.
+
 Repo names are matched case-insensitively everywhere (GitHub treats them
 that way); pages and state always use the lowercase form. The `gh_handle`
 and `gh_involvement` config keys are reserved: tolerated when present,

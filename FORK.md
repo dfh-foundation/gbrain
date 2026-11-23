@@ -6,7 +6,7 @@ separate by accident — the recipe, and its rows in the canonical pricing table
 Smaller deltas follow it: the
 [managed-install hint](#managed-install-hint),
 [GitHub pull request pages](#github-pull-request-pages), and the
-[GitHub repo exclude list](#github-repo-exclude-list).
+[GitHub repo exclude list](#github-repo-exclude-list) with its title filter.
 
 Designs for Health runs gbrain on an EC2 host inside AWS. Every provider gbrain
 ships needs an API key; Bedrock signs with SigV4, so the host authenticates from
@@ -262,3 +262,15 @@ not read the list, so a delivery for an excluded repo still queues a sync job
 that the scope guard then turns into a no-op.
 
 This one is generic enough to offer upstream.
+
+### Title filter
+
+`gh_exclude_titles` drops single issues and pull requests by title, set with
+`gbrain sources set-gh-exclude-titles <id> <regex|none>`. We mark privileged
+work in the title, and a privileged PR has to leave search when it is marked,
+not at the next weekly full sweep. So a match is checked on the list entry
+before any detail fetch, again on the detail in pass 2 and on a webhook
+refresh, and soft-deletes an existing page through `dropItemPage`, which the
+webhook delete path now shares. The pattern compiles once per sync and a bad
+one throws, since indexing past it is the failure this exists to prevent.
+`github-source.ts` grows by 30 lines and `sources.ts` by 3.
