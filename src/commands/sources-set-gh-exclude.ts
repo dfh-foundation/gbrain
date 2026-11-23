@@ -14,7 +14,7 @@
  * stays under its module-size ceiling.
  */
 import type { BrainEngine } from '../core/engine.ts';
-import { isValidRepoName } from '../core/github-source.ts';
+import { compileTitleExclude, isValidRepoName } from '../core/github-source.ts';
 import { normalizeSourceConfig, parseSourceConfig } from '../core/sources-load.ts';
 
 export async function runSetGhExclude(engine: BrainEngine, args: string[]): Promise<void> {
@@ -35,6 +35,57 @@ export async function runSetGhExclude(engine: BrainEngine, args: string[]): Prom
   }
   const exclude = [...new Set(entries)].sort();
 
+  const config = await loadGithubConfig(engine, id);
+
+  const prior = typeof config.gh_exclude === 'string' ? config.gh_exclude : '';
+  const next = exclude.join(',');
+  if (prior === next) {
+    console.log(`Source "${id}" gh_exclude unchanged (${next || 'empty'}).`);
+    return;
+  }
+  if (next) config.gh_exclude = next;
+  else delete config.gh_exclude;
+  await writeConfig(engine, id, config);
+  console.log(`Source "${id}" gh_exclude: ${prior || 'empty'} -> ${next || 'empty'}.`);
+  if (next) console.log('  Pages already indexed for these repos are pruned on the next full sweep.');
+}
+
+/**
+ * gbrain sources set-gh-exclude-titles <id> <regex|none>
+ *
+ * Writes `gh_exclude_titles`: a case-insensitive regex for issue and PR titles
+ * the sync never materializes. A matching item's page is dropped when the
+ * sweep or a webhook next sees it, which is how a PR marked privileged after
+ * it was indexed leaves search. An uncompilable pattern is rejected here and
+ * again at sync time, since indexing past a broken one is the leak.
+ */
+export async function runSetGhExcludeTitles(engine: BrainEngine, args: string[]): Promise<void> {
+  const id = args[0];
+  const raw = args[1];
+  if (!id || raw === undefined) {
+    console.error('Usage: gbrain sources set-gh-exclude-titles <id> <regex|none>');
+    console.error('  Issue and PR titles (case-insensitive) a github source never syncs.');
+    process.exit(2);
+  }
+  const next = raw === 'none' ? '' : raw;
+  try { compileTitleExclude(next); } catch (err) {
+    console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(2);
+  }
+  const config = await loadGithubConfig(engine, id);
+  const prior = typeof config.gh_exclude_titles === 'string' ? config.gh_exclude_titles : '';
+  if (prior === next) {
+    console.log(`Source "${id}" gh_exclude_titles unchanged.`);
+    return;
+  }
+  if (next) config.gh_exclude_titles = next;
+  else delete config.gh_exclude_titles;
+  await writeConfig(engine, id, config);
+  // The pattern itself is not echoed: it can name the matter it exists to hide.
+  console.log(`Source "${id}" gh_exclude_titles ${next ? 'set' : 'cleared'}.`);
+}
+
+async function loadGithubConfig(engine: BrainEngine, id: string): Promise<Record<string, unknown>> {
   const rows = await engine.executeRaw<{ config: unknown }>(
     `SELECT config FROM sources WHERE id = $1 LIMIT 1`,
     [id],
@@ -49,19 +100,12 @@ export async function runSetGhExclude(engine: BrainEngine, args: string[]): Prom
     console.error(`Error: source "${id}" is not a github source.`);
     process.exit(3);
   }
+  return config;
+}
 
-  const prior = typeof config.gh_exclude === 'string' ? config.gh_exclude : '';
-  const next = exclude.join(',');
-  if (prior === next) {
-    console.log(`Source "${id}" gh_exclude unchanged (${next || 'empty'}).`);
-    return;
-  }
-  if (next) config.gh_exclude = next;
-  else delete config.gh_exclude;
+async function writeConfig(engine: BrainEngine, id: string, config: Record<string, unknown>): Promise<void> {
   await engine.executeRaw(
     `UPDATE sources SET config = $1::text::jsonb WHERE id = $2`,
     [JSON.stringify(normalizeSourceConfig(config)), id],
   );
-  console.log(`Source "${id}" gh_exclude: ${prior || 'empty'} -> ${next || 'empty'}.`);
-  if (next) console.log('  Pages already indexed for these repos are pruned on the next full sweep.');
 }

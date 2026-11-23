@@ -45,7 +45,9 @@ export function parseGitHubSourceConfig(
     typeof config.gh_dir === 'string' && config.gh_dir.length > 0
       ? config.gh_dir
       : fallbackDir;
-  return { tokenEnv, app, scope, repos, exclude, dir };
+  const excludeTitles =
+    typeof config.gh_exclude_titles === 'string' && config.gh_exclude_titles.length > 0 ? config.gh_exclude_titles : undefined;
+  return { tokenEnv, app, scope, repos, exclude, excludeTitles, dir };
 }
 
 export function parseRepoList(value: unknown): string[] {

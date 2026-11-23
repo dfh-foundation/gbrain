@@ -69,6 +69,8 @@ export interface GitHubSourceConfig {
   repos: string[];
   /** owner/name list (lowercase) never synced under either scope; a full sweep prunes their pages. */
   exclude?: string[];
+  /** Case-insensitive regex source; an issue or PR whose title matches is never materialized, and its page is dropped. */
+  excludeTitles?: string;
   /** Managed dir where pages are materialized. */
   dir: string;
 }
@@ -1046,6 +1048,34 @@ interface GitHubSyncDeps {
   cfg: GitHubSourceConfig;
   opts: SyncOpts;
   client: GitHubClient;
+  titleRe?: RegExp | null;
+}
+
+/** Compiled once per sync, so a bad pattern fails the run loudly instead of indexing everything. */
+export function compileTitleExclude(source: string | undefined): RegExp | null {
+  if (!source) return null;
+  try { return new RegExp(source, 'i'); } catch (err) {
+    throw new Error(`gh_exclude_titles is not a valid regex: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+/** Soft-delete an item's page and remove its file; logs carry repo#number only. */
+async function dropItemPage(deps: GitHubSyncDeps, repo: string, number: number, summary: GitHubSyncSummary): Promise<void> {
+  const filePath = itemPagePath(deps.cfg.dir, repo, number);
+  const slug = slugifyPath(`gh/${repo}/${number}`);
+  const rows = await deps.engine.executeRaw<{ slug: string }>(
+    `SELECT slug FROM pages WHERE source_id = $1 AND slug = $2 AND deleted_at IS NULL`,
+    [deps.sourceId, slug],
+  );
+  if (deps.managed) {
+    for (const row of rows) if (await deps.managed.delete(row.slug, relative(deps.cfg.dir, filePath).replace(/\\/g, '/'))) summary.deleted++;
+    return;
+  }
+  if (rows.length > 0) {
+    await deps.engine.deletePages([slug], { sourceId: deps.sourceId });
+    summary.deleted += rows.length;
+  }
+  rmSync(filePath, { force: true });
 }
 
 async function materializePage(deps: GitHubSyncDeps, filePath: string, content: string,
@@ -1180,7 +1210,7 @@ async function runGitHubSyncInner(engine: BrainEngine, sourceId: string, cfg: Gi
   const appTokens = cfg.app ? new AppTokenProvider(cfg.app, fetchImpl ?? fetch) : null;
   const client = new GitHubClient(appTokens ?? process.env[cfg.tokenEnv] ?? '', fetchImpl);
   if (managed) await managed.assertAccount(await resolveGitHubAccount(cfg, client, appTokens, opts.signal)); // #5686 installation/login pin
-  const deps: GitHubSyncDeps = { engine, sourceId, cfg, opts, client, managed };
+  const deps: GitHubSyncDeps = { engine, sourceId, cfg, opts, client, managed, titleRe: compileTitleExclude(cfg.excludeTitles) };
   const summary: GitHubSyncSummary = {
     status: 'synced',
     added: 0,
@@ -1286,8 +1316,14 @@ async function runGitHubSyncInner(engine: BrainEngine, sourceId: string, cfg: Gi
         const pendingDetail: typeof items = [];
         for (const item of items) {
           const filePath = itemPagePath(cfg.dir, repo, item.number);
-          keepPaths.add(relative(cfg.dir, filePath).replace(/\\/g, '/'));
           summary.itemsSeen++;
+          if (deps.titleRe?.test(item.list.title ?? '')) {
+            await dropItemPage(deps, repo, item.number, summary);
+            if (item.updated_at > maxUpdatedAt) maxUpdatedAt = item.updated_at;
+            progress.tick(1, `${repo}#${item.number} excluded by title`);
+            continue;
+          }
+          keepPaths.add(relative(cfg.dir, filePath).replace(/\\/g, '/'));
           // Open PRs are never fresh: their check state can change without
           // touching the PR's updated_at (a new check run does not bump it),
           // so they are re-fetched every sweep. Cost is bounded by the number
@@ -1343,6 +1379,13 @@ async function runGitHubSyncInner(engine: BrainEngine, sourceId: string, cfg: Gi
             summary.itemDetailFetches++;
             try {
               const data = await fetchItemData(repo, item.number, item.kind, client, { signal: opts.signal });
+              if (deps.titleRe?.test(data.detail.title ?? '')) {
+                await dropItemPage(deps, repo, item.number, summary);
+                keepPaths.delete(relative(cfg.dir, filePath).replace(/\\/g, '/'));
+                progress.tick(1, `${repo}#${item.number} excluded by title`);
+                if (item.updated_at > maxUpdatedAt) maxUpdatedAt = item.updated_at;
+                continue;
+              }
               const imported = await materializePage(deps, filePath, renderItemPage(data, true, managed ? null : undefined), activePack);
               if (imported.status === 'imported') {
                 summary.pagesAffected.push(imported.slug);
@@ -1439,24 +1482,9 @@ async function refreshSingleItem(
 ): Promise<void> {
   const repo = item.repo.toLowerCase();
   const filePath = itemPagePath(deps.cfg.dir, repo, item.number);
-  const slug = slugifyPath(`gh/${repo}/${item.number}`);
-  if (item.deleted) {
-    const rows = await deps.engine.executeRaw<{ slug: string }>(
-      `SELECT slug FROM pages WHERE source_id = $1 AND slug = $2 AND deleted_at IS NULL`,
-      [deps.sourceId, slug],
-    );
-    if (deps.managed) {
-      for (const row of rows) if (await deps.managed.delete(row.slug, relative(deps.cfg.dir, filePath).replace(/\\/g, '/'))) summary.deleted++;
-      return;
-    }
-    if (rows.length > 0) {
-      await deps.engine.deletePages([slug], { sourceId: deps.sourceId });
-      summary.deleted += rows.length;
-    }
-    rmSync(filePath, { force: true });
-    return;
-  }
+  if (item.deleted) return dropItemPage(deps, repo, item.number, summary);
   const data = await fetchItemData(repo, item.number, item.kind, deps.client, { signal: deps.opts.signal });
+  if (deps.titleRe?.test(data.detail.title ?? '')) return dropItemPage(deps, repo, item.number, summary);
   const imported = await materializePage(deps, filePath, renderItemPage(data, true, deps.managed ? null : undefined), activePack);
   if (imported.status === 'imported') {
     summary.pagesAffected.push(imported.slug);

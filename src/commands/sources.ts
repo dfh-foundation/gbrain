@@ -1881,6 +1881,7 @@ export async function runSources(engine: BrainEngine, args: string[]): Promise<v
     // #4739 non-destructive local_path pointer repair
     case 'set-path':   { const { runSetPath } = await import('./sources-set-path.ts'); return runSetPath(engine, rest); }
     case 'set-gh-exclude': { const { runSetGhExclude } = await import('./sources-set-gh-exclude.ts'); return runSetGhExclude(engine, rest); }
+    case 'set-gh-exclude-titles': { const { runSetGhExcludeTitles } = await import('./sources-set-gh-exclude.ts'); return runSetGhExcludeTitles(engine, rest); }
     case 'audit':      return runAudit(engine, rest);
     // v0.46 github-source demo (offline, privacy-clean fixtures)
     case 'demo':       { const { runSourcesDemo } = await import('./sources-demo.ts'); return runSourcesDemo(engine, rest); }
@@ -1960,6 +1961,8 @@ Subcommands:
   set-gh-exclude <id> <owner/name,...|none>
                                     Repos a github source never syncs; the next
                                     full sweep prunes their pages.
+  set-gh-exclude-titles <id> <regex|none>
+                                    Issue/PR titles a github source never syncs.
   webhook <set|show|rotate|clear> <id> [options]
                                     v0.40 — per-source webhook secret management.
                                     Run 'sources webhook --help' for subcommand detail.

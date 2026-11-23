@@ -91,4 +91,15 @@ describe('gbrain sources set-gh-exclude', () => {
   test('an unknown source exits 4', async () => {
     await expectExit(['set-gh-exclude', 'nope', 'acme/secret'], 4);
   });
+
+  test('set-gh-exclude-titles stores, clears, and rejects a bad pattern', async () => {
+    await seed('gh', { kind: 'github', gh_exclude: 'acme/secret' });
+    await runSources(engine, ['set-gh-exclude-titles', 'gh', 'attorne?y.{0,3}client']);
+    expect((await readConfig('gh')).gh_exclude_titles).toBe('attorne?y.{0,3}client');
+    expect((await readConfig('gh')).gh_exclude).toBe('acme/secret');
+    await expectExit(['set-gh-exclude-titles', 'gh', '('], 2);
+    expect((await readConfig('gh')).gh_exclude_titles).toBe('attorne?y.{0,3}client');
+    await runSources(engine, ['set-gh-exclude-titles', 'gh', 'none']);
+    expect('gh_exclude_titles' in (await readConfig('gh'))).toBe(false);
+  });
 });
